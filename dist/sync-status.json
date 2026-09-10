@@ -1,15 +1,21 @@
 {
   "state": "partial",
-  "completedAt": "2026-09-10T05:32:08.183Z",
-  "dataAsOf": "2026-09-10T05:32:08.183Z",
+  "completedAt": "2026-09-10T06:33:23.505Z",
+  "dataAsOf": "2026-09-10T06:33:23.505Z",
   "coverage": {
     "catalogCards": 605,
     "checkedPsa8": 192,
     "pricedPsa8": 182,
     "publicNoSalesPsa8": 10,
     "pendingPsa8": 413,
-    "updatedThisRun": 192
+    "updatedThisRun": 11
   },
-  "message": "確認済みの履歴を表示しています。全種類を定期更新の対象に含めています。",
-  "startedAt": "2026-09-10T04:51:10.827Z"
+  "message": "全種類更新は未完了。今回PSA8を11種類再確認。ALT公開ページの読み込み停止・タイムアウト、および未特定カードの調査ページでログイン要求を確認。前回の価格と確認日時を保持しています。",
+  "startedAt": "2026-09-10T06:25:26Z",
+  "durationSeconds": 478,
+  "runCoverage": {
+    "catalogCards": 605,
+    "confirmedPsa8ThisRun": 11,
+    "unfinishedPsa8ThisRun": 594
+  }
 }
