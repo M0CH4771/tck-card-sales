@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'probe: 1 card / full: all cards and save'
+        description: 'probe: 2 cards × PSA10/9/8 / full: all cards and save'
         required: true
         default: probe
         type: choice
@@ -16,6 +16,8 @@ on:
       - '.github/workflows/alt-refresh.yml'
       - 'scripts/cloud-run.mjs'
       - 'scripts/local-scrape.mjs'
+      - 'scripts/grouped-scrape.mjs'
+      - 'scripts/read-population.mjs'
       - 'scripts/read-public-page.mjs'
       - 'scripts/public-match.mjs'
       - 'package-lock.json'

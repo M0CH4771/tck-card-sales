@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readPublicPage} from './read-public-page.mjs';
+import {readPopulation,historySignature,freshGradeHistory} from './read-population.mjs';
 function fixture({noSales=false,boundary=true,blocked=false}={}){
  const el=(tag,text,extra={})=>({tagName:tag,textContent:text,innerText:text,children:[],getClientRects:()=>[{}],getAttribute:()=>'',...extra});
  // Mirrors the observed ALT text-transform discrepancy: source title case, rendered uppercase.
@@ -19,3 +20,19 @@ const read=options=>vm.runInNewContext('('+readPublicPage.toString()+')()',fixtu
 test('CSSで大文字の成約見出しも読め、日付付き出品価格を含めない',()=>{const r=read();assert.equal(r.historyReady,true);assert.equal(r.grade,'8');assert.equal(r.rows.length,1);assert.match(r.rows[0].text,/\$20/);});
 test('明示された履歴なしと読込中を区別する',()=>{const r=read({noSales:true});assert.equal(r.noSales,true);assert.equal(r.rows.length,0);assert.equal(r.historyReady,true);assert.equal(read({boundary:false}).historyReady,false);});
 test('人間確認を成功扱いしないためのフラグを返す',()=>{assert.equal(read({blocked:true}).blocked,true);});
+test('上部がPSA10でも履歴で選択されたPSA9を判定する',()=>{
+ const button=(grade,selected)=>({getClientRects:()=>[{}],querySelector:()=>({textContent:grade}),style:{borderBottomWidth:selected?'1px':'0px',borderBottomStyle:selected?'solid':'none',borderBottomColor:'rgb(124, 80, 252)'}});
+ const group={querySelectorAll:()=>[button('10',false),button('9',true),button('8',false)]};
+ const label={textContent:'PSA population',parentElement:group};
+ const ctx={document:{querySelector:()=>({querySelectorAll:()=>[label]})},getComputedStyle:e=>e.style};
+ const result=vm.runInNewContext('('+readPopulation.toString()+')()',ctx);
+ assert.equal(result.selected,'9');assert.equal(result.grades.join(','),'10,9,8');
+});
+test('グレードを切り替えても旧価格のままなら取り込まない',()=>{
+ const before={rows:[{text:'Buy now\nSep 1, 2026\n$100'}],noSales:false,historyReady:true};
+ assert.equal(freshGradeHistory(before,{selected:'8'},'8',historySignature(before),false),false);
+ assert.equal(freshGradeHistory(before,{selected:'10'},'8',null,true),false);
+ const after={...before,rows:[{text:'Buy now\nSep 1, 2026\n$20'}]};
+ assert.equal(freshGradeHistory(after,{selected:'8'},'8',historySignature(before),false),true);
+ assert.equal(freshGradeHistory({...after,historyReady:false},{selected:'8'},'8',historySignature(before),true),false);
+});

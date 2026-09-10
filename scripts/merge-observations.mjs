@@ -11,7 +11,8 @@ export function mergeObservations(previous,catalog,targets,observations,complete
     const card=findCatalogCard(p,catalog.cards);
     return card?{...p,id:card.id+'-psa'+p.grade,catalogId:card.id,number:card.number,set:card.set,setCode:card.setCode,checkedAt:p.checkedAt||(p.sales.length?existing.asOf:'')}:p;
   });
-  const products=new Map(catalogProducts(catalog,records,'8').map(p=>[p.id,p]));
+  const multiGrade=targets.products.some(t=>t.grades.includes('10'));
+  const products=new Map(catalogProducts(catalog,records,multiGrade?'all':'8').map(p=>[p.id,p]));
   for(const p of records)if(p.grade!=='8')products.set(p.id,p);
   const targetMap=new Map(targets.products.map(p=>[p.catalogId,p]));
   for(const p of products.values()){

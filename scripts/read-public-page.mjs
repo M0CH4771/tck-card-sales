@@ -7,7 +7,7 @@ export function readPublicPage(){
  const main=document.querySelector('main');
  const out={blocked,auth,title:'',grade:'',rows:[],noSales:false,historyReady:false,diagnostic:{headingFound:false,transactionText:''}};
  if(!main)return out;
- out.title=main.querySelector('h2')?.textContent?.trim()||'';
+ out.title=[...main.querySelectorAll('h1,h2')].map(e=>e.textContent?.trim()||'').find(t=>/^\d{4}\s/.test(t)&&/#\d+/.test(t))||'';
  out.grade=(main.innerText||'').match(/(?:^|\n)PSA\s*\n\s*([\d.]+)\s*\n/i)?.[1]||'';
  // CSS text-transform changes innerText to uppercase. Match textContent case-insensitively.
  const heading=[...main.querySelectorAll('h1,h2,h3,[role="heading"]')].find(e=>visible(e)&&/^recent transactions$/i.test(e.textContent.trim()));
