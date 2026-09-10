@@ -1,0 +1,39 @@
+<!doctype html><html lang="ja"><head><base target="_top"><meta charset="utf-8"><style>
+body{font-family:Arial,'Noto Sans JP',sans-serif;color:#202338;margin:0;padding:16px;font-size:14px}h2{margin:0 0 8px}button,input,select{font:inherit;padding:9px;border:1px solid #d5d5e5;border-radius:6px;background:white}button{cursor:pointer;color:#4036da}button:disabled{opacity:.5;cursor:default}.toolbar,.entry{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}.entry select{max-width:100%}#card{width:100%}#quantity{width:70px}.primary{background:#4036da;color:white}#status{min-height:24px;color:#555}#status.error{color:#b31d34}.counts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.counts div{background:#f1f0ff;padding:10px;text-align:center;border-radius:6px}.counts strong{display:block;font-size:22px}.table-wrap{overflow:auto}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;padding:9px;border-bottom:1px solid #ddd}th{background:#f4f4fa}.muted{font-size:12px;color:#737386}#retry{border-color:#b31d34}#pdf-link{display:inline-block;margin:8px;color:#4036da}[hidden]{display:none!important}
+</style></head><body>
+<h2>共有の買取記録</h2><p class="muted">全員で同じ枚数を共有します。日付は日本時間。訂正は「枚数を減らす」で記録します。</p>
+<div class="toolbar"><label>集計日 <input id="day" type="date"></label><button id="today">本日</button><button id="reload">更新</button><button id="pdf" disabled>この日のPDFを作成</button><a id="pdf-link" hidden>PDFを保存</a></div>
+<div id="status" role="status">接続中…</div><button id="retry" hidden>未確認の操作を同じIDで再確認</button>
+<label>カードを検索 <input id="search" type="search" placeholder="カード名・型番" style="width:100%"></label><select id="card" aria-label="買取するカード"></select>
+<div id="counts" class="counts"></div>
+<div class="entry"><label>PSA <select id="grade"><option>8</option><option>9</option><option>10</option></select></label><label>枚数 <input id="quantity" type="number" min="1" max="1000" step="1" value="1"></label><button id="add" class="primary" disabled>買取枚数を追加</button><button id="subtract" disabled>枚数を減らす</button></div>
+<h3 id="total">この日の買取一覧</h3><div class="table-wrap"><table><thead><tr><th>カード名</th><th>型番・収録弾</th><th>PSA</th><th>枚数</th></tr></thead><tbody id="rows"></tbody></table></div>
+<script>
+const bridgeNonce='<?!= bridgeNonce ?>',hostOrigin='https://m0ch4771.github.io';
+const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let cards=[],summary=null,pending=null,busy=false,reading=false,seq=0,pdfUrl='',queuedCard='';
+const pendingKey='alt-purchase-pending-v1';
+function status(text,error=false){$('status').textContent=text;$('status').className=error?'error':'';}
+function call(name,arg){return new Promise((resolve,reject)=>{google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[name](arg);});}
+function persist(){try{if(pending)sessionStorage.setItem(pendingKey,JSON.stringify(pending));else sessionStorage.removeItem(pendingKey);}catch{}}
+function buttons(){const disabled=busy||!!pending||!summary||$('day').value!==summary.today||!$('card').value;$('add').disabled=disabled;$('subtract').disabled=disabled;$('retry').hidden=!pending;$('retry').disabled=busy;$('pdf').disabled=busy||!summary?.items.length;}
+function render(){
+ if(!summary)return;
+ $('total').textContent=summary.day+' の買取一覧：合計 '+summary.total+'枚';
+ $('rows').innerHTML=summary.items.map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+esc(x.number)+'<br>'+esc(x.set)+'</td><td>'+esc(x.grade)+'</td><td>'+x.quantity+'</td></tr>').join('')||'<tr><td colspan="4">この日の買取記録はありません</td></tr>';
+ $('counts').innerHTML=['8','9','10'].map(g=>{const item=summary.items.find(x=>x.id===$('card').value&&x.grade===g);return '<div>PSA '+g+'<strong>'+(item?.quantity||0)+'枚</strong></div>';}).join('');
+ buttons();window.top.postMessage({type:'alt-purchase-summary',nonce:bridgeNonce,summary},hostOrigin);
+}
+function options(){const value=queuedCard||$('card').value,q=$('search').value.normalize('NFKC').toLowerCase().replace(/\s/g,'');const filtered=cards.filter(c=>(c.name+c.number+c.set).normalize('NFKC').toLowerCase().replace(/\s/g,'').includes(q));$('card').innerHTML=filtered.map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name+' '+c.number+' / '+c.set)+'</option>').join('');if(filtered.some(c=>c.id===value))$('card').value=value;queuedCard='';render();}
+function setCard(id){if(!cards.length){queuedCard=id;return;}$('search').value='';queuedCard=id;options();}
+window.addEventListener('message',e=>{if(e.origin===hostOrigin&&e.source===window.top&&e.data?.nonce===bridgeNonce&&e.data.type==='alt-purchase-select')setCard(String(e.data.id||''));});
+async function refresh(){if(reading||busy||!$('day').value)return;reading=true;const request=++seq,day=$('day').value;try{const next=await call('purchaseList',day);if(request===seq&&day===$('day').value){summary=next;render();if(!pending)status('共有データ更新：'+new Date(next.updatedAt).toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo'}));}}catch(e){status('共有データを確認できません。'+e.message,true);}finally{reading=false;}}
+async function send(){if(!pending||busy)return;busy=true;seq++;buttons();status('保存を確認中…');const operation=pending;let timer=setTimeout(()=>status('応答を待っています。新しい操作として追加せず、そのままお待ちください。',true),20000);try{const result=await call('purchaseAdd',operation);if(result.ok){pending=null;persist();summary=result.summary;$('day').value=summary.day;render();status(result.replayed?'保存済みの操作を確認しました（二重加算なし）':'共有の買取枚数を保存しました');}else{if(result.retryable===false){pending=null;persist();}status(result.error,true);}}catch(e){status('保存できたか未確認です。「再確認」で同じ操作を確認してください。 '+e.message,true);}finally{clearTimeout(timer);busy=false;buttons();}}
+function add(sign){if(pending||busy)return;const quantity=Number($('quantity').value);if(!Number.isInteger(quantity)||quantity<1||quantity>1000){status('枚数は1〜1000の整数で入力してください',true);return;}pending={id:crypto.randomUUID(),day:$('day').value,cardId:$('card').value,grade:$('grade').value,delta:sign*quantity};persist();send();}
+$('add').onclick=()=>add(1);$('subtract').onclick=()=>add(-1);$('retry').onclick=send;$('reload').onclick=refresh;
+$('today').onclick=()=>{$('day').value=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo'}).format(new Date());summary=null;buttons();refresh();};
+$('day').onchange=()=>{seq++;summary=null;$('pdf').disabled=true;buttons();refresh();};$('search').oninput=options;$('card').onchange=render;
+$('pdf').onclick=async()=>{const day=$('day').value;$('pdf').disabled=true;status('PDFを作成中…');try{const pdf=await call('purchasePdf',day);const bytes=Uint8Array.from(atob(pdf.base64),c=>c.charCodeAt(0));if(pdfUrl)URL.revokeObjectURL(pdfUrl);pdfUrl=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));$('pdf-link').href=pdfUrl;$('pdf-link').download=pdf.name;$('pdf-link').hidden=false;status('PDFを作成しました。「PDFを保存」を押してください。');}catch(e){status('PDF作成に失敗しました。'+e.message,true);}finally{buttons();}};
+async function boot(){try{try{pending=JSON.parse(sessionStorage.getItem(pendingKey)||'null');}catch{}const result=await call('purchaseBootstrap');cards=result.cards;summary=result.summary;$('day').value=summary.day;options();render();status(pending?'前回の未確認操作があります。「再確認」を押してください。':'共有の買取記録に接続しました');window.top.postMessage({type:'alt-purchase-ready',nonce:bridgeNonce},hostOrigin);}catch(e){status('接続できません。'+e.message,true);}}
+setInterval(()=>{if(!document.hidden)refresh();},15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});boot();
+</script></body></html>

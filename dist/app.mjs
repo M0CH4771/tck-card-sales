@@ -1,3 +1,4 @@
+import {selectPurchaseCard,purchaseCount} from './purchases.mjs';
 import {cardKey,gradeComparison,yenAmount,validateFx} from './comparison.mjs';
 import {syncConfig} from './sync-config.mjs';
 import {validateDataset, filterProducts, exportCsv, datasetFromCsv, safeUrl} from './core.mjs';
@@ -40,7 +41,9 @@ function render(){
   $('show-more')?.addEventListener('click',()=>{shownLimit+=50;render();});
   const selected=visible.find(p=>p.id===selectedId);
   renderDetail(selected);
+  selectPurchaseCard(selected);
   const comparison=document.createElement('section');comparison.className='comparison-section';comparison.innerHTML='<h3>PSA 8・9・10 の直近成約</h3>'+comparisonHtml(selected,false)+'<p class=\"fx-caption\">円は表示中の為替レートによる参考換算です。各グレードの成約日は異なります。</p>';
+  const entryButton=document.createElement('button');entryButton.className='button';entryButton.textContent='このカードの買取枚数を入力';entryButton.addEventListener('click',()=>document.getElementById('purchases').scrollIntoView({behavior:'smooth',block:'start'}));comparison.append(entryButton);
   $('detail').prepend(comparison);
   const back=document.createElement('button');back.className='button mobile-back';back.textContent='↑ 検索結果に戻る';back.addEventListener('click',()=>$('results').scrollIntoView({behavior:'smooth',block:'start'}));$('detail').prepend(back);updateUrl();
 }
@@ -130,7 +133,7 @@ boot();
 
 function comparisonHtml(p,compact){
  const products=imported?dataset.products:catalogProducts(catalog,dataset.products,'all');
- return '<div class="grade-comparison '+(compact?'compact':'')+'">'+gradeComparison(p,products,$('source').value).map(({grade,product,latest})=>`<div class="grade-cell"><strong>PSA ${grade}</strong>${latest?`<span class="grade-usd">${money(latest.price)}</span><span class="grade-yen">${yen(latest.price)}</span><small>${date(latest.date)}</small>${compact?'':`<small>${escapeHtml(latest.source)}</small>`}`:`<span class="grade-empty">${product?.sales.length?'該当取引なし':product?.checkState==='no_sales'?'公開履歴なし':'未確認'}</span>`}</div>`).join('')+'</div>';
+ return '<div class="grade-comparison '+(compact?'compact':'')+'">'+gradeComparison(p,products,$('source').value).map(({grade,product,latest})=>`<div class="grade-cell"><strong>PSA ${grade}</strong>${latest?`<span class="grade-usd">${money(latest.price)}</span><span class="grade-yen">${yen(latest.price)}</span><small>${date(latest.date)}</small>${compact?'':`<small>${escapeHtml(latest.source)}</small>`}`:`<span class="grade-empty">${product?.sales.length?'該当取引なし':product?.checkState==='no_sales'?'公開履歴なし':'未確認'}</span>`}${purchaseCount(p.catalogId,grade)===null?'':`<small class="purchase-count">本日買取 ${purchaseCount(p.catalogId,grade)}枚</small>`}</div>`).join('')+'</div>';
 }
 function showFx(){
  const rate=manualRate??fx?.rate;
@@ -146,3 +149,5 @@ async function loadFx(){
 }
 $('fx-rate').addEventListener('input',()=>{const input=$('fx-rate');const n=Number(input.value);manualRate=input.value&&Number.isFinite(n)&&n>0?n:null;showFx();});
 setInterval(()=>{if(!document.hidden)loadFx();},3600000);
+
+window.addEventListener('purchase-counts-updated',()=>{if(dataset.products.length)render();});
