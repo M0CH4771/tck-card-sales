@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#4036da">
+  <meta name="description" content="PSAグレード、レアリティ、カード名・型番で探すトレカの成約履歴。取引元と成約日を確認できます。">
+  <title>トレカ成約価格検索</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.mjs"></script>
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="./"><span class="brand-icon" aria-hidden="true">T</span><span>トレカ成約価格検索<small>SALES EXPLORER</small></span></a><div class="header-right"><span class="top-label">ALT掲載の取引履歴</span><button id="reload" class="button subtle">最新データを表示</button></div></header>
+  <main>
+    <section class="search-area" aria-labelledby="page-title">
+      <div class="section-heading"><div><p class="eyebrow">CARD RESEARCH</p><h1 id="page-title">あのカード、いくらで売れた？</h1></div><button class="button" id="export" disabled>履歴CSV出力 <span aria-hidden="true">↓</span></button></div>
+      <form id="search-form" role="search"><label class="searchbox"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="search" type="search" autocomplete="off" placeholder="カード名・型番で検索（例：ユキワラシ、200/193）" aria-label="カード名・型番で検索"><kbd aria-hidden="true">/</kbd></label></form>
+      <div class="filters"><label>鑑定<select id="grade"><option value="all">PSA 8・9・10</option><option value="8" selected>PSA 8</option><option value="9">PSA 9</option><option value="10">PSA 10</option></select></label><label>レアリティ<select id="rarity"><option value="all">AR・CHR</option><option>AR</option><option>CHR</option></select></label><label>収録弾<select id="setCode"><option value="all">すべての収録弾</option></select></label><label>価格の確認状況<select id="availability"><option value="all">すべてのカード</option><option value="priced">成約履歴あり</option><option value="unpriced">成約履歴なし・未確認</option></select></label><label>取引元<select id="source"><option value="all">すべて</option><option>ALT</option><option>eBay</option></select></label><div class="presets"><button class="chip" data-preset="AR">PSA 8 × AR</button><button class="chip" data-preset="CHR">PSA 8 × CHR</button><button id="clear" class="text-button">解除</button></div></div>
+    </section>
+    <div class="sync-strip"><span id="sync-schedule">自動取得を確認中</span><span id="sync-state" role="status">最終取得を確認中</span></div><div id="notice" class="notice" role="status">登録データを読み込んでいます…</div>
+    <section class="workspace" aria-label="検索結果と取引詳細">
+      <div class="results-column"><div class="results-heading"><h2>検索結果 <span id="count">—</span></h2><label class="sort-label"><span class="sr-only">並び順</span><select id="sort"><option value="recent">成約日が新しい順</option><option value="high">価格が高い順</option><option value="low">価格が低い順</option><option value="name">名前順</option></select></label></div><div id="results" aria-live="polite"><div class="loading">データを読み込み中</div></div></div>
+      <div id="detail" class="detail" aria-live="polite"><div class="empty-detail">カードを選ぶと、最近の取引を確認できます。</div></div>
+    </section>
+    <footer><span>価格は米ドル（USD）。出品中の最低価格は含みません。</span><button class="text-button" id="import-open">データを読み込む</button></footer>
+  </main>
+  <dialog id="import-dialog" aria-labelledby="import-title"><form method="dialog" class="dialog-header"><h2 id="import-title">成約データを読み込む</h2><button class="close-button" aria-label="閉じる">×</button></form><p>JSONまたは履歴CSVを読み込むと、この画面のデータを置き換えます。再読込すると共通データに戻ります。</p><label class="file-label">ファイルを選択<input id="import-file" type="file" accept=".json,.csv,application/json,text/csv"></label><p id="import-error" class="error" role="alert"></p><details><summary>CSVの列名</summary><code>product_id,name,name_en,number,set,set_code,year,rarity,grader,grade,language,image_url,alt_url,provenance,catalog_id,check_state,checked_at,sale_id,date,price,currency,source,type</code><p>1行につき1件の取引。dateはYYYY-MM-DD、priceはUSDの数値。同じ商品の鑑定グレードごとに異なるproduct_idを使ってください。</p></details></dialog>
+  <div id="toast" role="status" class="toast" hidden></div>
+</body>
+</html>

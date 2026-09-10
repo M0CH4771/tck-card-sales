@@ -1,0 +1,8 @@
+{
+  "name": "tck-alt-sales-search",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test scripts/core.test.mjs"
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "mode": "public-pages",
+  "asOf": "2026-09-10T03:46:00.196Z",
+  "notice": "ALT公開ページで確認した8商品・27件の履歴です。確認：2026-09-10。自動更新は準備中です。",
+  "products": [
+    {
+      "id": "eb74c4d7-1c23-4773-8f7c-883a50b0c504-psa9",
+      "name": "ユキワラシ",
+      "nameEn": "Snorunt",
+      "number": "200/193",
+      "set": "メガドリームex",
+      "setCode": "M2a",
+      "year": "2025",
+      "rarity": "AR",
+      "grader": "PSA",
+      "grade": "9",
+      "language": "日本語",
+      "imageUrl": "https://alt-images.b-cdn.net/external/ebay/live/147501854910_0.jpg?height=531&width=324&quality=50",
+      "url": "https://alt.xyz/itm/eb74c4d7-1c23-4773-8f7c-883a50b0c504/external",
+      "provenance": "ALT公開商品ページ／2026-09-10T03:46:00.196Z確認",
+      "sales": [
+        {
+          "id": "https://www.ebay.com/itm/158243871272",
+          "date": "2026-09-07",
+          "price": 10,
+          "currency": "USD",
+          "source": "eBay",
+          "type": "オークション"
+        },
+        {
+          "id": "https://www.ebay.com/itm/298619811687",
+          "date": "2026-09-03",
+          "price": 18,
+          "currency": "USD",
+          "source": "eBay",
+          "type": "オークション"
+        },
+        {
+          "id": "https://www.ebay.com/itm/117340053120",
+          "date": "2026-08-25",
+          "price": 125,
+          "currency": "USD",
+          "source": "eBay",
+          "type": "ベストオファー"
+        },
+        {
+          "id": "https://www.ebay.com/itm/298587756295",
+          "date": "2026-08-25",
+          "price": 20,
+          "currency": "USD",
+          "source": "eBay",
+          "type": "ベストオファー"
+        }
+      ]
+    },
+    {
+      "id": "eb74c4d7-1c23-4773-8f7c-883a50b0c504-psa8",
+      "name": "ユキワラシ",
+      "nameEn": "Snorunt",
+      "number": "200/193",
+      "set": "メガドリームex",
+      "setCode": "M2a",
+      "year": "2025",
+      "rarity": "AR",
+      "grader": "PSA",
+      "grade": "8",
+      "language": "日本語",
+      "imageUrl": "",
+      "url": "https://alt.xyz/itm/eb74c4d7-1c23-4773-8f7c-883a50b0c504/external",
+      "provenance": "ALT公開商品ページ／2026-09-10T03:46:00.196Z確認",
+      "sales": [
+        {
+          "id": "https://www.ebay.com/itm/800413143241",
+          "date": "2026-07-31",
+          "price": 7,
+          "currency": "USD",
+          "source": "eBay",
+          "type": "オークション"
+        },
+        {
+          "id": "https://www.ebay.com/itm/307063552783",
+          "date": "2026-07-22",
+          "price": 13,
+          "currency": "USD",
+          "source": "eBay",
+          "type": "オークション"
+        },
+        {
+          "id": "https://www.ebay.com/itm/298399365880",
+          "date": "2026-06-21",
+          "price": 13,
+          "currency": "USD",
+          "source": "eBay",
+          "type": "オークション"
+        },
+        {
+          "id": "https://www.ebay.com/itm/800133737150",
+          "date": "2026-06-13",
+          "price": 3,
+          "currency": "USD",
+          "source": "eBay",
+          "type": "オークション"
+        }
+      ]
+    }
+  ]
+}

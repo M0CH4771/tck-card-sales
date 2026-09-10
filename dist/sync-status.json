@@ -1,0 +1,15 @@
+{
+  "state": "partial",
+  "completedAt": "2026-09-10T05:32:08.183Z",
+  "dataAsOf": "2026-09-10T05:32:08.183Z",
+  "coverage": {
+    "catalogCards": 605,
+    "checkedPsa8": 192,
+    "pricedPsa8": 182,
+    "publicNoSalesPsa8": 10,
+    "pendingPsa8": 413,
+    "updatedThisRun": 192
+  },
+  "message": "確認済みの履歴を表示しています。全種類を定期更新の対象に含めています。",
+  "startedAt": "2026-09-10T04:51:10.827Z"
+}
