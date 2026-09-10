@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "mode": "live",
-  "asOf": "2026-09-10T06:33:23.505Z",
+  "asOf": "2026-09-10T07:51:07.182Z",
   "notice": "日本語版AR・CHR一覧。未確認の商品も表示します。価格は各PSAグレードで確認できた成約履歴のみ。",
   "products": [
     {
@@ -13342,10 +13342,10 @@
       "language": "日本語",
       "imageUrl": "",
       "url": "https://alt.xyz/itm/9437e303-ae7d-43ca-a0e2-6a69ad2e18c4/external",
-      "provenance": "ALT公開商品ページ／2026-09-10T06:28:45.864Z確認",
+      "provenance": "ALT公開商品ページ／2026-09-10T07:50:05.865Z確認",
       "catalogId": "jp-sv2d-079",
       "checkState": "verified",
-      "checkedAt": "2026-09-10T06:28:45.864Z",
+      "checkedAt": "2026-09-10T07:50:05.865Z",
       "sales": [
         {
           "id": "https://www.fanaticscollect.com/buy-now/b1db3e53-c5f7-467e-9c3d-3988970dcad5",

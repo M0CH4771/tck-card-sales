@@ -1,21 +1,31 @@
 {
   "state": "partial",
-  "completedAt": "2026-09-10T06:33:23.505Z",
-  "dataAsOf": "2026-09-10T06:33:23.505Z",
+  "startedAt": "2026-09-10T07:50:00.741Z",
+  "completedAt": "2026-09-10T07:51:07.182Z",
+  "dataAsOf": "2026-09-10T07:51:07.182Z",
+  "durationSeconds": 66,
   "coverage": {
     "catalogCards": 605,
     "checkedPsa8": 192,
     "pricedPsa8": 182,
     "publicNoSalesPsa8": 10,
     "pendingPsa8": 413,
-    "updatedThisRun": 11
+    "updatedThisRun": 1
   },
-  "message": "全種類更新は未完了。今回PSA8を11種類再確認。ALT公開ページの読み込み停止・タイムアウト、および未特定カードの調査ページでログイン要求を確認。前回の価格と確認日時を保持しています。",
-  "startedAt": "2026-09-10T06:25:26Z",
-  "durationSeconds": 478,
   "runCoverage": {
-    "catalogCards": 605,
-    "confirmedPsa8ThisRun": 11,
-    "unfinishedPsa8ThisRun": 594
-  }
+    "total": 606,
+    "selected": 606,
+    "attempted": 7,
+    "confirmed": 1,
+    "failed": 6,
+    "unattempted": 599
+  },
+  "performance": {
+    "concurrency": 3,
+    "perItemLimitSeconds": 30,
+    "runLimitMinutes": 110,
+    "observedItemsPerMinute": 6.3
+  },
+  "stopReason": "6件連続で表示取得に失敗したため停止",
+  "message": "今回 1/606件確認。全件試行と全件確認成功は別です。6件連続で表示取得に失敗したため停止"
 }
