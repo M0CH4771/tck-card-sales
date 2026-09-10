@@ -1,136 +1,122 @@
 import {chromium} from 'playwright';
 import {readFile,writeFile,mkdir,rename,rm} from 'node:fs/promises';
-import {homedir} from 'node:os';
 import {resolve,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {createInterface} from 'node:readline/promises';
 import {mergeObservations} from './merge-observations.mjs';
 import {validateCatalog} from '../dist/catalog.mjs';
 import {recordFromAlt} from './parse-alt.mjs';
+import {readPublicPage} from './read-public-page.mjs';
+import {matches} from './public-match.mjs';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
-const args=process.argv.slice(2), login=args.includes('--login'), apply=args.includes('--apply');
+const args=process.argv.slice(2),apply=args.includes('--apply'),diagnose=args.includes('--diagnose');
+if(args.includes('--login')){console.log('現在はログイン不要です。npm run scrape:probe を実行してください。');process.exit(0);}
 const value=k=>args.includes(k)?args[args.indexOf(k)+1]:undefined;
-const limit=Number(value('--limit')||Infinity);
-const timeoutSeconds=Number(value('--timeout')||20);
-if(!Number.isFinite(timeoutSeconds)||timeoutSeconds<5||timeoutSeconds>120)throw Error('--timeout は5〜120秒です');
-const diagnose=args.includes('--diagnose');
-if(!(limit>0)||(!Number.isInteger(limit)&&limit!==Infinity))throw Error('--limit は正の整数です');
-const profile=resolve(homedir(),'Library/Application Support/alt-market-scraper');
+const int=(k,d,min,max)=>{const n=Number(value(k)??d);if(!Number.isInteger(n)||n<min||n>max)throw Error(`${k} は ${min}〜${max}の整数です`);return n;};
+const concurrency=int('--concurrency',3,1,4),timeoutSeconds=int('--timeout',30,5,120),maxMinutes=int('--max-minutes',110,1,120),limit=int('--limit',10000,1,10000);
 const runDir=resolve(root,'.local-runs',new Date().toISOString().replace(/[:.]/g,'-'));
-await mkdir(profile,{recursive:true,mode:0o700});
 await mkdir(resolve(root,'.local-runs'),{recursive:true});
 const lock=resolve(root,'.local-runs/lock');
 try{await mkdir(lock);}catch{throw Error('別の取得処理が実行中です。異常終了した場合のみ .local-runs/lock を削除してください。');}
 const load=async p=>JSON.parse(await readFile(resolve(root,p),'utf8'));
 const save=async(p,v)=>{await writeFile(p+'.tmp',JSON.stringify(v,null,2)+'\n');await rename(p+'.tmp',p);};
-const norm=s=>String(s).normalize('NFKC').toLowerCase().replace(/[^a-z0-9]/g,'');
-const aliases={M6:['Storm Emeralda'],M5:['Abyss Eye'],M4:['Ninja Spinner'],M3:['Nihil Zero','Munikis Zero'],M2a:['Mega Dream'],M2:['Inferno X'],M1S:['Mega Symphonia'],M1L:['Mega Brave'],SV11W:['White Flare'],SV11B:['Black Bolt'],SV10:['Glory of Team Rocket','Rocket Glory'],SV9a:['Heat Wave Arena','Hot Air Arena'],SV9:['Battle Partners'],SV8:['Super Electric Breaker'],SV7a:['Paradise Dragona'],SV7:['Stellar Miracle'],SV6a:['Night Wanderer'],SV6:['Mask of Change'],SV5a:['Crimson Haze'],SV5K:['Wild Force'],SV5M:['Cyber Judge'],SV4a:['Shiny Treasure'],SV4K:['Ancient Roar'],SV4M:['Future Flash'],SV3a:['Raging Surf'],SV3:['Ruler of the Black Flame'],SV2a:['151'],SV2P:['Snow Hazard'],SV2D:['Clay Burst'],SV1a:['Triplet Beat'],SV1V:['Violet'],SV1S:['Scarlet'],S12a:['Vstar Universe'],S11a:['Incandescent Arcana'],S10a:['Dark Phantasma'],S9a:['Battle Region'],S8b:['Vmax Climax'],SM11b:['Dream League']};
-function matches(text,t){
- const rarity=t.rarity==='AR'?/\bArt Rare\b|\bAR\b/i:/\bCharacter (?:Holo )?Rare\b|\bCHR\b/i;
- return /Japanese/i.test(text)&&norm(text).includes(norm(t.nameEn))&&Number(text.match(/#(\d+)/)?.[1])===Number(t.number.split('/')[0])&&rarity.test(text)&&!/Special Art Rare|Character Super Rare|\bSAR\b|\bCSR\b/i.test(text)&&(aliases[t.setCode]||[]).some(a=>norm(text).includes(norm(a)));
-}
-let context,stop=false;
-process.on('SIGINT',()=>{stop=true;console.log('\n中断要求：現在のカードを終えて結果を保存します。');});
-const startedAt=new Date().toISOString(),started=Date.now();
+let browser,context,stop=false,stopReason='';
+const startedAt=new Date().toISOString(),started=Date.now(),runDeadline=started+maxMinutes*60000;
+process.on('SIGINT',()=>{stop=true;stopReason='ユーザーによる中断';console.log('現在処理中のカードを終えて保存します。');});
 try{
- context=await chromium.launchPersistentContext(profile,{channel:'chrome',headless:false,locale:'en-US',viewport:{width:1440,height:1000}});
- const page=context.pages()[0]||await context.newPage();
- page.setDefaultTimeout(timeoutSeconds*1000);
- if(login){
-  await page.goto('https://alt.xyz/login',{waitUntil:'domcontentloaded'});
-  const rl=createInterface({input:process.stdin,output:process.stdout});
-  await rl.question('Chromeで自分でALTにログインしてください。ALTに戻ったら、このターミナルでEnter：');rl.close();
-  console.log('専用Chromeを閉じます。次に npm run scrape:sample を実行してください。');
- }else{
-  await mkdir(runDir,{recursive:true});
-  const previous=await load('dist/data.json'),catalog=validateCatalog(await load('dist/catalog.json')),targets=await load('scripts/targets.json');
-  const all=targets.products.flatMap(t=>t.grades.map(grade=>({t,grade})));
-  const jobs=(args.includes('--known-only')?all.filter(j=>j.t.urlsByGrade?.[j.grade]||j.t.url):all).slice(0,limit);
-  const observations=[],results=[];
-  async function checkpoint(final=false){
-   const completedAt=new Date().toISOString();
-   const merged=mergeObservations(previous,catalog,targets,observations,completedAt);
-   const confirmed=merged.coverage.updatedThisRun;
-   const status={state:final?(confirmed===all.length?'succeeded':confirmed?'partial':'failed'):'running',startedAt,completedAt:final?completedAt:null,dataAsOf:merged.data.asOf,durationSeconds:Math.round((Date.now()-started)/1000),coverage:merged.coverage,runCoverage:{total:all.length,selected:jobs.length,attempted:results.length,confirmed,failed:results.filter(r=>!r.ok).length,unattempted:all.length-results.length},message:`今回 ${confirmed}/${all.length}件確認。詳細はローカル実行レポートを参照。`};
-   await save(resolve(runDir,'observations.json'),observations);
-   await save(resolve(runDir,'data.json'),merged.data);await save(resolve(runDir,'targets.json'),targets);
-   await save(resolve(runDir,'sync-status.json'),status);await save(resolve(runDir,'report.json'),{...status,results,validationFailures:merged.failures});
-   if(final&&apply){for(const [p,v]of [['dist/data.json',merged.data],['dist/sync-status.json',status],['scripts/targets.json',targets]])await save(resolve(root,p),v);}
-   return status;
-  }
-  async function blocked(){
-   const text=await page.locator('body').innerText();
-   if(/Verify you are human|Checking your browser|Just a moment|unusual traffic|ログインがブロック|Access denied/i.test(text))throw Error('STOP: 人間確認・アクセス制限が表示されました');
-   if(/Unauthorized action|Verify your identity/i.test(text)||/\/(?:mfa-challenge|login)(?:\/|$)/.test(new URL(page.url()).pathname))throw Error('STOP: ALTの本人確認が未完了です');
-   if(new URL(page.url()).hostname!=='alt.xyz')throw Error('STOP: ALTへのログインが必要です。npm run scrape:login を実行してください');
-  }
-  for(const [i,{t,grade}]of jobs.entries()){
-   if(stop)break;
-   const itemStart=Date.now();
-   try{
-    let url=t.urlsByGrade?.[grade]||t.url;
-    if(!url){
-     const query=`${t.nameEn} ${Number(t.number.split('/')[0])} Japanese ${t.rarity==='AR'?'Art Rare':'Character Rare'}`;
-     await page.goto('https://alt.xyz/browse?query='+encodeURIComponent(query),{waitUntil:'domcontentloaded'});
-     await page.getByRole('heading',{name:'Search',exact:true}).waitFor();
-     await page.waitForTimeout(4000);await blocked();
-     const candidates=await page.locator('main a[href*="/itm/"]').evaluateAll(els=>els.map(a=>({url:a.href,text:a.innerText})));
-     const found=candidates.filter(c=>matches(c.text,t)&&new RegExp(`PSA\\s*${grade}(?![\\d.])`).test(c.text));
-     const chosen=found[0];
-     if(!chosen)throw Error('対象カード・収録弾・PSAグレードを照合できる商品リンクなし（履歴なしとは扱いません）');
-     url=chosen.url;
-    }
-    const parsed=new URL(url);if(parsed.hostname!=='alt.xyz'||!parsed.pathname.startsWith('/itm/'))throw Error('ALT商品URLではありません');
-    await page.goto(url,{waitUntil:'domcontentloaded'});
-    await blocked();
-    const transactionHeading=page.getByRole('heading',{name:'Recent transactions',exact:true});
-    await transactionHeading.waitFor();
-    await transactionHeading.scrollIntoViewIfNeeded();
-    await blocked();
-    // Only visible transaction links between the heading and the following market/listing section.
-    const read=()=>page.evaluate(()=>{
-     const main=document.querySelector('main');if(!main)return null;
-     const title=main.querySelector('h2')?.innerText||'';
-     const text=main.innerText,grade=text.match(/(?:^|\n)PSA\s*\n\s*([\d.]+)\s*\n/)?.[1]||'';
-     const heading=[...main.querySelectorAll('h3')].find(e=>e.innerText.trim()==='Recent transactions');
-     if(!heading)return {title,grade,rows:[],noSales:false};
-     const after=text.split('Recent transactions')[1]?.split(/\n(?:Listings|Similar listings|Pokemon)\n/)[0]||'';
-     let boundary=[...main.querySelectorAll('a,h2,h3')].find(e=>(heading.compareDocumentPosition(e)&Node.DOCUMENT_POSITION_FOLLOWING)&&((e.tagName==='A'&&e.getAttribute('href')?.includes('/exchange?category='))||e.innerText==='Similar listings'));
-     const rows=[...main.querySelectorAll('a')].filter(a=>(heading.compareDocumentPosition(a)&Node.DOCUMENT_POSITION_FOLLOWING)&&(!boundary||(a.compareDocumentPosition(boundary)&Node.DOCUMENT_POSITION_FOLLOWING))&&a.getClientRects().length&&/\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}, \d{4}\b/.test(a.innerText)).map(a=>({text:a.innerText,source:a.querySelector('img')?.alt||'',url:a.href}));
-     return {title,grade,rows,noSales:/There are no recent transactions|No recent transactions/i.test(after)};
-    });
-    let raw;
-    const deadline=Date.now()+timeoutSeconds*1000;
-    do{await blocked();raw=await read();if(raw&&(raw.rows.length||raw.noSales))break;await page.waitForTimeout(1000);}while(Date.now()<deadline);
-    if(!raw||(!raw.rows.length&&!raw.noSales))throw Error('成約欄の読み込み未完了');
-    if(raw.grade!==grade)throw Error(`表示PSA ${raw.grade||'不明'}：対象PSA ${grade}を確認できません`);
-    if(!matches(raw.title,t))throw Error('商品名・番号・言語・レアリティ・収録弾が不一致または表記不足');
-    raw={...raw,url:page.url(),historyReady:true,imageUrl:''};
-    const observedAt=new Date().toISOString();recordFromAlt(raw,{...t,url:raw.url},grade,observedAt);
-    t.urlsByGrade={...t.urlsByGrade,[grade]:raw.url};if(grade==='8')t.url=raw.url;
-    observations.push({catalogId:t.catalogId,grade,observedAt,raw});
-    results.push({catalogId:t.catalogId,grade,ok:true,seconds:(Date.now()-itemStart)/1000});
-   }catch(e){
-    let diagnostic={};
-    try{
-     diagnostic=await page.locator('main').evaluate(main=>{
-      const text=main.innerText||'',start=text.indexOf('Recent transactions');
-      const section=start<0?'':text.slice(start).split(/\n(?:Listings|Similar listings|Pokemon)\n/)[0];
-      return {headingFound:start>=0,transactionText:section.slice(0,1800),visibleDatedLinks:[...main.querySelectorAll('a')].filter(a=>a.getClientRects().length&&/\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}, \d{4}\b/.test(a.innerText)).length};
-     },undefined,{timeout:3000});
-     if(diagnose&&new URL(page.url()).pathname.startsWith('/itm/'))await page.locator('main').screenshot({path:resolve(runDir,t.catalogId+'-psa'+grade+'.png'),timeout:5000});
-    }catch{}
-    results.push({catalogId:t.catalogId,grade,ok:false,seconds:(Date.now()-itemStart)/1000,error:e.message,diagnostic});
-    if(diagnose)console.log('診断：'+JSON.stringify(diagnostic));
-    if(e.message.startsWith('STOP:'))stop=true;
-    if(results.length>=3&&results.slice(-3).every(r=>!r.ok)){
-     console.log('3件連続で取得失敗したため停止します。全件へ同じ失敗を繰り返しません。');stop=true;
-    }
+ await mkdir(runDir,{recursive:true});
+ const previous=await load('dist/data.json'),catalog=validateCatalog(await load('dist/catalog.json')),targets=await load('scripts/targets.json');
+ const all=targets.products.flatMap(t=>t.grades.map(grade=>({t,grade})));
+ const control=all.find(j=>j.t.catalogId==='jp-sv2d-079'&&j.grade==='8');
+ const selected=all.filter(j=>(!args.includes('--known-only')||j.t.urlsByGrade?.[j.grade]||j.t.url)&&(!value('--id')||j.t.catalogId===value('--id')));
+ const ordered=control&&selected.includes(control)?[control,...selected.filter(j=>j!==control)]:selected;
+ const jobs=ordered.slice(0,limit);
+ if(!jobs.length)throw Error('取得対象がありません');
+ const observations=[],results=[];
+ browser=await chromium.launch({channel:'chrome',headless:false,chromiumSandbox:true});
+ // Fresh incognito context: never read the old MFA/login profile or save auth state.
+ context=await browser.newContext({locale:'en-US',viewport:{width:1440,height:1000}});
+ async function runJob({t,grade}){
+  const itemStart=Date.now(),deadline=Math.min(itemStart+timeoutSeconds*1000,runDeadline);
+  const page=await context.newPage();
+  const remaining=()=>{const n=deadline-Date.now();if(n<=0)throw Error('商品全体の制限時間に達しました');return n;};
+  page.setDefaultTimeout(Math.max(1,deadline-Date.now()));
+  let timer,lastRaw=null;
+  const task=async()=>{
+   const check=raw=>{if(raw.blocked)throw Error('STOP: 人間確認・アクセス制限');if(raw.auth)throw Error('このページはログイン・本人確認が必要（公開取得対象外）');};
+   let url=t.urlsByGrade?.[grade]||t.url;
+   if(!url){
+    const query=`${t.nameEn} ${Number(t.number.split('/')[0])} Japanese ${t.rarity==='AR'?'Art Rare':'Character Rare'}`;
+    await page.goto('https://alt.xyz/browse?query='+encodeURIComponent(query),{waitUntil:'domcontentloaded',timeout:remaining()});
+    let found;
+    do{
+     check(await page.evaluate(readPublicPage));
+     const candidates=await page.locator('main a[href*="/itm/"]').evaluateAll(els=>els.filter(a=>a.getClientRects().length).map(a=>({url:a.href,text:a.innerText})));
+     found=candidates.find(c=>matches(c.text,t)&&new RegExp(`PSA\\s*${grade}(?![\\d.])`).test(c.text));
+     if(found)break;
+     const text=await page.locator('main').innerText({timeout:remaining()});
+     if(/no results|no items found|0 items/i.test(text))throw Error('公開検索で照合可能な商品なし');
+     await page.waitForTimeout(Math.min(500,remaining()));
+    }while(remaining()>0);
+    if(!found)throw Error('公開検索で照合可能な商品なし');
+    url=found.url;
    }
-   console.log(`[${i+1}/${jobs.length}] ${t.name} PSA${grade} ${results.at(-1).ok?'OK':results.at(-1).error} / 経過 ${Math.round((Date.now()-started)/60000)}分`);
-   await checkpoint();if(!stop)await page.waitForTimeout(2000);
-  }
-  const status=await checkpoint(true);console.log(JSON.stringify(status,null,2));console.log('実行結果：'+runDir);
-  if(status.state!=='succeeded')process.exitCode=2;
+   const parsed=new URL(url);if(!['alt.xyz','www.alt.xyz'].includes(parsed.hostname)||!parsed.pathname.startsWith('/itm/'))throw Error('ALT商品URLではありません');
+   await page.goto(url,{waitUntil:'domcontentloaded',timeout:remaining()});
+   let scrolled=false;
+   do{
+    lastRaw=await page.evaluate(readPublicPage);check(lastRaw);
+    if(lastRaw.diagnostic.headingFound&&!scrolled){await page.getByRole('heading',{name:/^recent transactions$/i}).scrollIntoViewIfNeeded({timeout:remaining()});scrolled=true;}
+    if(lastRaw.historyReady)break;
+    await page.waitForTimeout(Math.min(500,remaining()));
+   }while(remaining()>0);
+   const raw={...lastRaw,url:page.url(),imageUrl:''};
+   if(!raw.historyReady)throw Error('成約欄の読み込み未完了');
+   if(raw.grade!==grade)throw Error(`表示PSA ${raw.grade||'不明'}：対象PSA ${grade}を確認できません`);
+   const listingTitle=(t.candidates||[]).find(c=>c.url===raw.url)?.text||'';
+   if(!matches(raw.title+' '+listingTitle,t))throw Error('商品名・型番・収録弾・レアリティの照合失敗');
+   const observedAt=new Date().toISOString();recordFromAlt(raw,{...t,url:raw.url,listingTitle},grade,observedAt);
+   return {catalogId:t.catalogId,grade,observedAt,raw};
+  };
+  try{
+   const observation=await Promise.race([task(),new Promise((_,reject)=>{timer=setTimeout(()=>{reject(Error('商品全体の制限時間に達しました'));void page.close().catch(()=>{});},Math.max(1,deadline-Date.now()));})]);
+   // Mutate shared results only after the timed task has successfully finished.
+   t.urlsByGrade={...t.urlsByGrade,[grade]:observation.raw.url};if(grade==='8')t.url=observation.raw.url;
+   observations.push(observation);
+   return {catalogId:t.catalogId,grade,ok:true,seconds:(Date.now()-itemStart)/1000};
+  }catch(e){
+   if(e.message.startsWith('STOP:')){stop=true;stopReason=e.message;}
+   if(diagnose)console.log('診断：'+JSON.stringify(lastRaw?.diagnostic||{headingFound:false}));
+   return {catalogId:t.catalogId,grade,ok:false,seconds:(Date.now()-itemStart)/1000,error:e.message,diagnostic:lastRaw?.diagnostic||{headingFound:false}};
+  }finally{clearTimeout(timer);await page.close().catch(()=>{});}
  }
-}finally{await context?.close();await rm(lock,{recursive:true,force:true});}
+ async function checkpoint(final=false){
+  const completedAt=new Date().toISOString(),merged=mergeObservations(previous,catalog,targets,observations,completedAt),confirmed=merged.coverage.updatedThisRun;
+  const elapsed=(Date.now()-started)/1000;
+  const status={state:final?(confirmed===all.length?'succeeded':confirmed?'partial':'failed'):'running',startedAt,completedAt:final?completedAt:null,dataAsOf:merged.data.asOf,durationSeconds:Math.round(elapsed),coverage:merged.coverage,runCoverage:{total:all.length,selected:jobs.length,attempted:results.length,confirmed,failed:results.filter(r=>!r.ok).length,unattempted:all.length-results.length},performance:{concurrency,perItemLimitSeconds:timeoutSeconds,runLimitMinutes:maxMinutes,observedItemsPerMinute:results.length?Math.round(results.length/elapsed*600)/10:0},stopReason,message:`今回 ${confirmed}/${all.length}件確認。全件試行と全件確認成功は別です。${stopReason}`};
+  await save(resolve(runDir,'observations.json'),observations);await save(resolve(runDir,'data.json'),merged.data);await save(resolve(runDir,'targets.json'),targets);
+  await save(resolve(runDir,'sync-status.json'),status);await save(resolve(runDir,'report.json'),{...status,results,validationFailures:merged.failures});
+  if(final&&apply)for(const[p,v]of[['dist/data.json',merged.data],['dist/sync-status.json',status],['scripts/targets.json',targets]])await save(resolve(root,p),v);
+  return status;
+ }
+ // Gate: do not launch hundreds of requests when a known publicly visible card cannot be read.
+ const first=await runJob(jobs[0]);results.push(first);console.log(`[1/${jobs.length}] ${jobs[0].t.name} PSA${first.grade} ${first.ok?'OK':first.error} / ${first.seconds.toFixed(1)}秒`);
+ if(!first.ok){stop=true;stopReason=stopReason||'最初の1件を取得できないため全件実行を停止';}
+ await checkpoint();
+ let consecutiveFailures=0;
+ for(let offset=1;offset<jobs.length&&!stop;offset+=concurrency){
+  if(Date.now()>=runDeadline){stopReason='実行時間上限。未試行分は未完了として保持';stop=true;break;}
+  const batch=jobs.slice(offset,offset+concurrency);
+  const settled=await Promise.allSettled(batch.map(runJob));
+  for(let i=0;i<settled.length;i++){
+   const item=settled[i],j=batch[i];const r=item.status==='fulfilled'?item.value:{catalogId:j.t.catalogId,grade:j.grade,ok:false,error:String(item.reason)};results.push(r);
+   consecutiveFailures=r.ok?0:consecutiveFailures+1;
+   console.log(`[${results.length}/${jobs.length}] ${j.t.name} PSA${r.grade} ${r.ok?'OK':r.error} / 経過 ${Math.round((Date.now()-started)/60000)}分`);
+  }
+  // Search misses alone must not stop a full-catalog scan. Stop repeated page-load failures.
+  if(consecutiveFailures>=6&&results.slice(-6).every(r=>/制限時間|Timeout|読み込み/.test(r.error||''))){stop=true;stopReason='6件連続で表示取得に失敗したため停止';}
+  await checkpoint();
+  if(!stop)await new Promise(r=>setTimeout(r,1000));
+ }
+ const status=await checkpoint(true);console.log(JSON.stringify(status,null,2));console.log('実行結果：'+runDir);
+ if(status.state!=='succeeded')process.exitCode=2;
+}finally{await context?.close();await browser?.close();await rm(lock,{recursive:true,force:true});}

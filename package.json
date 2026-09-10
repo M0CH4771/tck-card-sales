@@ -3,12 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test scripts/core.test.mjs",
+    "test": "node --test scripts/core.test.mjs scripts/public-page.test.mjs",
     "scrape:login": "node scripts/local-scrape.mjs --login",
-    "scrape:sample": "node scripts/local-scrape.mjs --known-only --limit 5",
+    "scrape:sample": "node scripts/local-scrape.mjs --known-only --limit 12",
     "scrape": "node scripts/local-scrape.mjs",
     "scrape:daily": "node scripts/daily.mjs",
-    "scrape:schedule": "node scripts/install-schedule.mjs"
+    "scrape:schedule": "node scripts/install-schedule.mjs",
+    "scrape:probe": "node scripts/local-scrape.mjs --id jp-sv2d-079 --limit 1 --concurrency 1 --diagnose"
   },
   "engines": {
     "node": ">=22"
