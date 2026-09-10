@@ -11,6 +11,9 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const args=process.argv.slice(2), login=args.includes('--login'), apply=args.includes('--apply');
 const value=k=>args.includes(k)?args[args.indexOf(k)+1]:undefined;
 const limit=Number(value('--limit')||Infinity);
+const timeoutSeconds=Number(value('--timeout')||20);
+if(!Number.isFinite(timeoutSeconds)||timeoutSeconds<5||timeoutSeconds>120)throw Error('--timeout は5〜120秒です');
+const diagnose=args.includes('--diagnose');
 if(!(limit>0)||(!Number.isInteger(limit)&&limit!==Infinity))throw Error('--limit は正の整数です');
 const profile=resolve(homedir(),'Library/Application Support/alt-market-scraper');
 const runDir=resolve(root,'.local-runs',new Date().toISOString().replace(/[:.]/g,'-'));
@@ -32,7 +35,7 @@ const startedAt=new Date().toISOString(),started=Date.now();
 try{
  context=await chromium.launchPersistentContext(profile,{channel:'chrome',headless:false,locale:'en-US',viewport:{width:1440,height:1000}});
  const page=context.pages()[0]||await context.newPage();
- page.setDefaultTimeout(45000);
+ page.setDefaultTimeout(timeoutSeconds*1000);
  if(login){
   await page.goto('https://alt.xyz/login',{waitUntil:'domcontentloaded'});
   const rl=createInterface({input:process.stdin,output:process.stdout});
@@ -58,6 +61,7 @@ try{
   async function blocked(){
    const text=await page.locator('body').innerText();
    if(/Verify you are human|Checking your browser|Just a moment|unusual traffic|ログインがブロック|Access denied/i.test(text))throw Error('STOP: 人間確認・アクセス制限が表示されました');
+   if(/Unauthorized action|Verify your identity/i.test(text)||/\/(?:mfa-challenge|login)(?:\/|$)/.test(new URL(page.url()).pathname))throw Error('STOP: ALTの本人確認が未完了です');
    if(new URL(page.url()).hostname!=='alt.xyz')throw Error('STOP: ALTへのログインが必要です。npm run scrape:login を実行してください');
   }
   for(const [i,{t,grade}]of jobs.entries()){
@@ -78,7 +82,11 @@ try{
     }
     const parsed=new URL(url);if(parsed.hostname!=='alt.xyz'||!parsed.pathname.startsWith('/itm/'))throw Error('ALT商品URLではありません');
     await page.goto(url,{waitUntil:'domcontentloaded'});
-    await page.getByRole('heading',{name:'Recent transactions',exact:true}).waitFor();await blocked();
+    await blocked();
+    const transactionHeading=page.getByRole('heading',{name:'Recent transactions',exact:true});
+    await transactionHeading.waitFor();
+    await transactionHeading.scrollIntoViewIfNeeded();
+    await blocked();
     // Only visible transaction links between the heading and the following market/listing section.
     const read=()=>page.evaluate(()=>{
      const main=document.querySelector('main');if(!main)return null;
@@ -92,7 +100,7 @@ try{
      return {title,grade,rows,noSales:/There are no recent transactions|No recent transactions/i.test(after)};
     });
     let raw;
-    const deadline=Date.now()+45000;
+    const deadline=Date.now()+timeoutSeconds*1000;
     do{await blocked();raw=await read();if(raw&&(raw.rows.length||raw.noSales))break;await page.waitForTimeout(1000);}while(Date.now()<deadline);
     if(!raw||(!raw.rows.length&&!raw.noSales))throw Error('成約欄の読み込み未完了');
     if(raw.grade!==grade)throw Error(`表示PSA ${raw.grade||'不明'}：対象PSA ${grade}を確認できません`);
@@ -102,7 +110,23 @@ try{
     t.urlsByGrade={...t.urlsByGrade,[grade]:raw.url};if(grade==='8')t.url=raw.url;
     observations.push({catalogId:t.catalogId,grade,observedAt,raw});
     results.push({catalogId:t.catalogId,grade,ok:true,seconds:(Date.now()-itemStart)/1000});
-   }catch(e){results.push({catalogId:t.catalogId,grade,ok:false,seconds:(Date.now()-itemStart)/1000,error:e.message});if(e.message.startsWith('STOP:'))stop=true;}
+   }catch(e){
+    let diagnostic={};
+    try{
+     diagnostic=await page.locator('main').evaluate(main=>{
+      const text=main.innerText||'',start=text.indexOf('Recent transactions');
+      const section=start<0?'':text.slice(start).split(/\n(?:Listings|Similar listings|Pokemon)\n/)[0];
+      return {headingFound:start>=0,transactionText:section.slice(0,1800),visibleDatedLinks:[...main.querySelectorAll('a')].filter(a=>a.getClientRects().length&&/\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}, \d{4}\b/.test(a.innerText)).length};
+     },undefined,{timeout:3000});
+     if(diagnose&&new URL(page.url()).pathname.startsWith('/itm/'))await page.locator('main').screenshot({path:resolve(runDir,t.catalogId+'-psa'+grade+'.png'),timeout:5000});
+    }catch{}
+    results.push({catalogId:t.catalogId,grade,ok:false,seconds:(Date.now()-itemStart)/1000,error:e.message,diagnostic});
+    if(diagnose)console.log('診断：'+JSON.stringify(diagnostic));
+    if(e.message.startsWith('STOP:'))stop=true;
+    if(results.length>=3&&results.slice(-3).every(r=>!r.ok)){
+     console.log('3件連続で取得失敗したため停止します。全件へ同じ失敗を繰り返しません。');stop=true;
+    }
+   }
    console.log(`[${i+1}/${jobs.length}] ${t.name} PSA${grade} ${results.at(-1).ok?'OK':results.at(-1).error} / 経過 ${Math.round((Date.now()-started)/60000)}分`);
    await checkpoint();if(!stop)await page.waitForTimeout(2000);
   }
