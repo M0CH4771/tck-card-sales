@@ -1,0 +1,6 @@
+node_modules/
+.local-runs/
+.env
+.env.*
+.DS_Store
+refresh-observations.json
