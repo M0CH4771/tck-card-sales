@@ -5,7 +5,7 @@ let peer=null,peerOrigin='',selected='',summary=null;
 const nonce=crypto.randomUUID();
 function sendSelection(){if(peer&&selected)peer.postMessage({type:'alt-purchase-select',nonce,id:selected},peerOrigin);}
 export function selectPurchaseCard(product){const id=product?.catalogId||'';if(id===selected)return;selected=id;sendSelection();}
-export function purchaseCount(cardId,grade){if(!summary||summary.day!==summary.today)return null;return summary.items.find(x=>x.id===cardId&&x.grade===grade)?.quantity||0;}
+export function purchaseCount(cardId,grade){if(!summary||summary.day!==summary.today||summary.day!==new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo'}).format(new Date()))return null;return summary.items.find(x=>x.id===cardId&&x.grade===grade)?.quantity||0;}
 if(!purchasesEndpoint){section.innerHTML='<h2>共有の買取記録</h2><p>買取記録は接続準備中です。</p>';}
 else{
  const url=new URL(purchasesEndpoint);
