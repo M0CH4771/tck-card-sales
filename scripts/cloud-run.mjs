@@ -1,0 +1,14 @@
+import {spawnSync} from 'node:child_process';
+import {readFile,readdir,appendFile} from 'node:fs/promises';
+const mode=process.env.ALT_MODE||'probe';
+if(!['probe','full'].includes(mode))throw Error('Unknown mode');
+const args=['scripts/local-scrape.mjs','--browser','chromium','--concurrency','3','--max-minutes','110'];
+if(mode==='probe')args.push('--id','jp-sv2d-079','--limit','1','--diagnose');else args.push('--apply');
+const start=Date.now();const result=spawnSync(process.execPath,args,{stdio:'inherit'});
+if(![0,2].includes(result.status))throw Error('Scraper did not finish normally');
+const dirs=(await readdir('.local-runs',{withFileTypes:true})).filter(d=>d.isDirectory()&&/^\d{4}-/.test(d.name)).map(d=>d.name).sort();
+const report=JSON.parse(await readFile('.local-runs/'+dirs.at(-1)+'/report.json','utf8'));
+if(Date.parse(report.startedAt)<start-5000)throw Error('Stale run report');
+if(process.env.GITHUB_OUTPUT)await appendFile(process.env.GITHUB_OUTPUT,`ready=true\nconfirmed=${report.runCoverage.confirmed}\n`);
+if(process.env.GITHUB_STEP_SUMMARY)await appendFile(process.env.GITHUB_STEP_SUMMARY,`## ALT ${mode}\n\n- Started: ${report.startedAt}\n- Seconds: ${report.durationSeconds}\n- Confirmed this run: ${report.runCoverage.confirmed}\n- Attempted: ${report.runCoverage.attempted}\n- Failed: ${report.runCoverage.failed}\n- Unattempted: ${report.runCoverage.unattempted}\n- State: ${report.state}\n\nFull-catalog completion is not implied by a successful workflow. See report artifact for card-level failures.\n`);
+if(!report.runCoverage.confirmed)process.exitCode=1;

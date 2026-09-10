@@ -12,6 +12,8 @@ const args=process.argv.slice(2),apply=args.includes('--apply'),diagnose=args.in
 if(args.includes('--login')){console.log('現在はログイン不要です。npm run scrape:probe を実行してください。');process.exit(0);}
 const value=k=>args.includes(k)?args[args.indexOf(k)+1]:undefined;
 const int=(k,d,min,max)=>{const n=Number(value(k)??d);if(!Number.isInteger(n)||n<min||n>max)throw Error(`${k} は ${min}〜${max}の整数です`);return n;};
+const browserChoice=value('--browser')||'chrome';
+if(!['chrome','chromium'].includes(browserChoice))throw Error('--browser は chrome または chromium です');
 const concurrency=int('--concurrency',3,1,4),timeoutSeconds=int('--timeout',30,5,120),maxMinutes=int('--max-minutes',110,1,120),limit=int('--limit',10000,1,10000);
 const runDir=resolve(root,'.local-runs',new Date().toISOString().replace(/[:.]/g,'-'));
 await mkdir(resolve(root,'.local-runs'),{recursive:true});
@@ -32,7 +34,7 @@ try{
  const jobs=ordered.slice(0,limit);
  if(!jobs.length)throw Error('取得対象がありません');
  const observations=[],results=[];
- browser=await chromium.launch({channel:'chrome',headless:false,chromiumSandbox:true});
+ browser=await chromium.launch({...(browserChoice==='chrome'?{channel:'chrome'}:{}),headless:false,chromiumSandbox:true});
  // Fresh incognito context: never read the old MFA/login profile or save auth state.
  context=await browser.newContext({locale:'en-US',viewport:{width:1440,height:1000}});
  async function runJob({t,grade}){
