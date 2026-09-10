@@ -42,7 +42,7 @@ try{
   const page=await context.newPage();
   const remaining=()=>{const n=deadline-Date.now();if(n<=0)throw Error('商品全体の制限時間に達しました');return n;};
   page.setDefaultTimeout(Math.max(1,deadline-Date.now()));
-  let timer,lastRaw=null;
+  let timer,lastRaw=null,phase='navigation',searchDiagnostic=null;
   const task=async()=>{
    const check=raw=>{if(raw.blocked)throw Error('STOP: 人間確認・アクセス制限');if(raw.auth)throw Error('このページはログイン・本人確認が必要（公開取得対象外）');};
    let url=t.urlsByGrade?.[grade]||t.url;
@@ -51,11 +51,14 @@ try{
     await page.goto('https://alt.xyz/browse?query='+encodeURIComponent(query),{waitUntil:'domcontentloaded',timeout:remaining()});
     let found;
     do{
-     check(await page.evaluate(readPublicPage));
+     lastRaw=await page.evaluate(readPublicPage);check(lastRaw);
      const candidates=await page.locator('main a[href*="/itm/"]').evaluateAll(els=>els.filter(a=>a.getClientRects().length).map(a=>({url:a.href,text:a.innerText})));
      found=candidates.find(c=>matches(c.text,t)&&new RegExp(`PSA\\s*${grade}(?![\\d.])`).test(c.text));
      if(found)break;
      const text=await page.locator('main').innerText({timeout:remaining()});
+     searchDiagnostic={candidateCount:candidates.length,text:text.slice(0,1500)};
+     // A rendered search with no matching card is not evidence of a site-wide outage.
+     phase=text.trim()?'search-match':'navigation';
      if(/no results|no items found|0 items/i.test(text))throw Error('公開検索で照合可能な商品なし');
      await page.waitForTimeout(Math.min(500,remaining()));
     }while(remaining()>0);
@@ -63,7 +66,9 @@ try{
     url=found.url;
    }
    const parsed=new URL(url);if(!['alt.xyz','www.alt.xyz'].includes(parsed.hostname)||!parsed.pathname.startsWith('/itm/'))throw Error('ALT商品URLではありません');
+   phase='navigation';
    await page.goto(url,{waitUntil:'domcontentloaded',timeout:remaining()});
+   phase='transactions';
    let scrolled=false;
    do{
     lastRaw=await page.evaluate(readPublicPage);check(lastRaw);
@@ -88,7 +93,9 @@ try{
   }catch(e){
    if(e.message.startsWith('STOP:')){stop=true;stopReason=e.message;}
    if(diagnose)console.log('診断：'+JSON.stringify(lastRaw?.diagnostic||{headingFound:false}));
-   return {catalogId:t.catalogId,grade,ok:false,seconds:(Date.now()-itemStart)/1000,error:e.message,diagnostic:lastRaw?.diagnostic||{headingFound:false}};
+   const timedOut=/制限時間|Timeout|読み込み/.test(e.message);
+   const error=phase==='search-match'&&timedOut?'公開検索の時間内に対象商品を特定できませんでした（未確認）':e.message;
+   return {catalogId:t.catalogId,grade,ok:false,seconds:(Date.now()-itemStart)/1000,error,phase,loadFailure:timedOut&&phase!=='search-match',diagnostic:{...lastRaw?.diagnostic,search:searchDiagnostic}};
   }finally{clearTimeout(timer);await page.close().catch(()=>{});}
  }
  async function checkpoint(final=false){
@@ -115,7 +122,7 @@ try{
    console.log(`[${results.length}/${jobs.length}] ${j.t.name} PSA${r.grade} ${r.ok?'OK':r.error} / 経過 ${Math.round((Date.now()-started)/60000)}分`);
   }
   // Search misses alone must not stop a full-catalog scan. Stop repeated page-load failures.
-  if(consecutiveFailures>=6&&results.slice(-6).every(r=>/制限時間|Timeout|読み込み/.test(r.error||''))){stop=true;stopReason='6件連続で表示取得に失敗したため停止';}
+  if(consecutiveFailures>=6&&results.slice(-6).every(r=>r.loadFailure===true)){stop=true;stopReason='6件連続で表示取得に失敗したため停止';}
   await checkpoint();
   if(!stop)await new Promise(r=>setTimeout(r,1000));
  }
