@@ -1,31 +1,31 @@
 {
   "state": "partial",
-  "startedAt": "2026-09-10T07:50:00.741Z",
-  "completedAt": "2026-09-10T07:51:07.182Z",
-  "dataAsOf": "2026-09-10T07:51:07.182Z",
-  "durationSeconds": 66,
+  "startedAt": "2026-09-10T07:58:35.589Z",
+  "completedAt": "2026-09-10T09:36:12.903Z",
+  "dataAsOf": "2026-09-10T09:36:12.903Z",
+  "durationSeconds": 5857,
   "coverage": {
     "catalogCards": 605,
     "checkedPsa8": 192,
     "pricedPsa8": 182,
     "publicNoSalesPsa8": 10,
     "pendingPsa8": 413,
-    "updatedThisRun": 1
+    "updatedThisRun": 174
   },
   "runCoverage": {
     "total": 606,
     "selected": 606,
-    "attempted": 7,
-    "confirmed": 1,
-    "failed": 6,
-    "unattempted": 599
+    "attempted": 606,
+    "confirmed": 174,
+    "failed": 432,
+    "unattempted": 0
   },
   "performance": {
     "concurrency": 3,
     "perItemLimitSeconds": 30,
     "runLimitMinutes": 110,
-    "observedItemsPerMinute": 6.3
+    "observedItemsPerMinute": 6.2
   },
-  "stopReason": "6件連続で表示取得に失敗したため停止",
-  "message": "今回 1/606件確認。全件試行と全件確認成功は別です。6件連続で表示取得に失敗したため停止"
+  "stopReason": "",
+  "message": "今回 174/606件確認。全件試行と全件確認成功は別です。"
 }
