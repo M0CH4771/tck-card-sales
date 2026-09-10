@@ -66,8 +66,8 @@ async function checkRun(){
 }
 function showDataNotice(){
   const count=dataset.products.reduce((n,p)=>n+p.sales.length,0);
-  const records=catalogProducts(catalog,dataset.products,'8'),priced=records.filter(p=>p.sales.length).length,checked=records.filter(p=>p.checkedAt).length;
-  $('notice').textContent=catalog.cards.length?`日本語版 AR ${catalog.cards.filter(c=>c.rarity==='AR').length}種類・CHR ${catalog.cards.filter(c=>c.rarity==='CHR').length}種類。PSA8：成約履歴あり ${priced}種類 / 確認済み ${checked}種類。カード一覧 ${catalog.asOf}時点。`:`${dataset.products.length}商品・${count}件の成約履歴。登録商品のRecent transactions欄が対象です。`;
+  const gradeCounts=['10','9','8'].map(g=>{const records=catalogProducts(catalog,dataset.products,g);return `PSA${g}：確認済み ${records.filter(p=>p.checkedAt).length} / ${records.length}種類`;}).join(' ／ ');
+  $('notice').textContent=catalog.cards.length?`日本語版 AR ${catalog.cards.filter(c=>c.rarity==='AR').length}種類・CHR ${catalog.cards.filter(c=>c.rarity==='CHR').length}種類。${gradeCounts}。カード一覧 ${catalog.asOf}時点。`:`${dataset.products.length}商品・${count}件の成約履歴。登録商品のRecent transactions欄が対象です。`;
   $('notice').className='notice';
 }
 async function loadData({silent=false}={}){

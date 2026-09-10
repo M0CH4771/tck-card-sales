@@ -33,7 +33,7 @@ jobs:
     permissions:
       contents: write
     env:
-      ALT_MODE: ${{ github.event_name == 'schedule' && 'full' || github.event_name == 'workflow_dispatch' && inputs.mode || 'probe' }}
+      ALT_MODE: ${{ github.event_name == 'schedule' && 'full' || github.event_name == 'workflow_dispatch' && inputs.mode || github.event_name == 'push' && startsWith(github.event.head_commit.message, '[alt-full]') && 'full' || 'probe' }}
     steps:
       - uses: actions/checkout@v4
         with:
