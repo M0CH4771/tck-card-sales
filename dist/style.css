@@ -16,3 +16,51 @@
 .grade-comparison{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px}.grade-cell{display:flex;flex-direction:column;min-width:0;padding:12px 8px;border:1px solid var(--line);border-radius:8px;background:#f8f8ff;text-align:center;overflow-wrap:anywhere}.grade-cell strong{color:var(--purple);font-size:14px}.grade-usd{font-size:22px;font-weight:800}.grade-yen,.yen-price{display:block;font-size:15px;color:#5145a3;font-weight:600}.grade-cell small{font-size:11px;color:var(--muted)}.grade-empty{font-size:12px;color:var(--muted);padding:12px 0}.compact .grade-usd{font-size:16px}.compact .grade-yen{font-size:12px}.compact .grade-cell{padding:8px 3px}.comparison-section{padding:20px;border-bottom:1px solid var(--line)}.fx-caption{font-size:12px;color:var(--muted);margin-bottom:0}.fx-bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:12px 0 20px;font-size:12px;color:var(--muted)}.fx-bar label{display:flex;align-items:center;gap:8px}.fx-bar input{width:110px;border:1px solid var(--line);padding:6px;border-radius:6px;background:white}.result-card .card-bottom{display:none}
 
 .purchase-section{background:white;border:1px solid var(--line);border-radius:12px;padding:20px;margin-top:24px;scroll-margin-top:20px}.purchase-count{color:#137a42!important;font-weight:700}.comparison-section>.button{margin-top:14px}
+
+/* Task-focused search and shared purchase workspace */
+[hidden]{display:none!important}
+:root{--muted:#626b80;--line:#dfe4ee}
+.topbar{height:76px}.brand small{letter-spacing:.03em}
+main{padding-top:20px}
+.view-nav{display:flex;gap:6px;background:#e9ecf4;padding:5px;border-radius:12px;width:fit-content;margin-bottom:26px;scroll-margin-top:16px}
+.view-nav button{border:0;background:transparent;color:#576078;font-weight:700;padding:12px 24px;border-radius:9px;min-height:48px}
+.view-nav button.active{background:white;color:var(--purple);box-shadow:0 2px 6px #20233812}
+.search-help{margin:6px 0 0;color:var(--muted);font-size:14px}
+.search-area{background:white;padding:24px;border:1px solid var(--line);border-radius:14px;margin-bottom:16px}
+.section-heading{margin-bottom:18px}
+.searchbox{background:#f8f9fc;border-color:#cbd2e0}
+.filter-disclosure{margin-top:16px}
+.filter-disclosure summary,.fx-settings summary{cursor:pointer;color:#505a72;font-weight:600;font-size:14px;padding:6px 0}
+.filters{padding-top:4px}
+.fx-settings{margin:0 0 18px}.fx-bar{padding:10px 0}
+.notice{margin-bottom:10px;font-size:12px;padding:9px 12px}
+.workspace{grid-template-columns:minmax(330px,400px) minmax(0,1fr);gap:24px}
+.result-card{padding:16px;margin-bottom:10px;border-radius:12px}
+.result-card.selected{background:#faf9ff}.result-card:hover{border-color:#a39be9}
+.card-subtitle{margin-bottom:8px}.card-top{margin-bottom:6px}
+.grade-cell{background:white;padding:16px 8px}
+.grade-cell strong{background:#efedff;border-radius:5px;padding:3px 0;margin-bottom:6px}
+.grade-usd{font-size:26px;line-height:1.4;font-variant-numeric:tabular-nums}
+.grade-yen{font-size:17px;color:#263751}
+.grade-cell small{font-size:12px;margin-top:4px}
+.compact .grade-usd{font-size:18px}.compact .grade-yen{font-size:13px}
+.compact .grade-cell{padding:7px 4px}.compact .grade-cell strong{font-size:12px}
+.comparison-section{padding:24px;background:#fafbff}
+.comparison-section h2{margin:4px 0;font-size:26px}
+.comparison-subtitle{font-size:13px;color:var(--muted);margin:0 0 20px}
+.comparison-section h3{font-size:14px;color:#505a72}
+.comparison-section>.button{width:100%;min-height:48px;margin-top:18px}
+.detail{margin-top:0;top:20px;max-height:calc(100dvh - 40px);border-radius:14px}
+.detail-head h2{font-size:21px}.detail-head{padding:22px 24px}.big-price{font-size:36px}
+.purchase-section{margin-top:0;padding:24px}.purchase-section h2{font-size:22px;margin-bottom:12px}
+@media(min-width:781px){#results{max-height:calc(100dvh - 95px);overflow:auto;padding:2px 5px 2px 2px;overscroll-behavior:contain}}
+@media(max-width:780px){
+ main{padding:16px 12px}.view-nav{width:100%;margin-bottom:18px}.view-nav button{flex:1;padding:11px 6px;font-size:14px}
+ .search-area{padding:16px}.search-help{font-size:12px}h1{font-size:21px}
+ .workspace{grid-template-columns:minmax(0,1fr)}
+ #results{max-height:480px;overflow:auto;padding:2px;overscroll-behavior:contain}
+ .detail{position:static;max-height:none;overflow:hidden}
+ .comparison-section{padding:18px}.comparison-section h2{font-size:23px}
+ .grade-usd{font-size:22px}.grade-yen{font-size:14px}
+ .purchase-section{padding:12px}.section-heading{flex-wrap:wrap}
+}

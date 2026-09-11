@@ -1,4 +1,4 @@
-import {selectPurchaseCard,purchaseCount} from './purchases.mjs';
+import {selectPurchaseCard,purchaseCount,showPurchaseView} from './purchases.mjs';
 import {cardKey,gradeComparison,yenAmount,validateFx} from './comparison.mjs';
 import {syncConfig} from './sync-config.mjs';
 import {validateDataset, filterProducts, exportCsv, datasetFromCsv, safeUrl} from './core.mjs';
@@ -42,8 +42,8 @@ function render(){
   const selected=visible.find(p=>p.id===selectedId);
   renderDetail(selected);
   selectPurchaseCard(selected);
-  const comparison=document.createElement('section');comparison.className='comparison-section';comparison.innerHTML='<h3>PSA 8・9・10 の直近成約</h3>'+comparisonHtml(selected,false)+'<p class=\"fx-caption\">円は表示中の為替レートによる参考換算です。各グレードの成約日は異なります。</p>';
-  const entryButton=document.createElement('button');entryButton.className='button';entryButton.textContent='このカードの買取枚数を入力';entryButton.addEventListener('click',()=>document.getElementById('purchases').scrollIntoView({behavior:'smooth',block:'start'}));comparison.append(entryButton);
+  const comparison=document.createElement('section');comparison.className='comparison-section';comparison.innerHTML='<p class="eyebrow">選択中のカード</p><h2>'+escapeHtml(selected.name)+'</h2><p class="comparison-subtitle">'+escapeHtml([selected.number,selected.set].filter(Boolean).join(' / '))+'</p><h3>PSA 8・9・10 の直近成約</h3>'+comparisonHtml(selected,false)+'<p class=\"fx-caption\">円は表示中の為替レートによる参考換算です。各グレードの成約日は異なります。</p>';
+  const entryButton=document.createElement('button');entryButton.className='button primary';entryButton.textContent='このカードの買取枚数を入力';entryButton.addEventListener('click',()=>showPurchaseView(true));comparison.append(entryButton);
   $('detail').prepend(comparison);
   const back=document.createElement('button');back.className='button mobile-back';back.textContent='↑ 検索結果に戻る';back.addEventListener('click',()=>$('results').scrollIntoView({behavior:'smooth',block:'start'}));$('detail').prepend(back);updateUrl();
 }

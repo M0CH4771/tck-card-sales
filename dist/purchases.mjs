@@ -1,5 +1,5 @@
 import {purchasesEndpoint} from './purchases-config.mjs';
-const section=document.createElement('section');section.id='purchases';section.className='purchase-section';
+const section=document.createElement('section');section.id='purchases';section.className='purchase-section';section.hidden=true;
 document.querySelector('.workspace').after(section);
 let peer=null,peerOrigin='',selected='',summary=null;
 const nonce=crypto.randomUUID();
@@ -23,3 +23,16 @@ else{
   }
  });
 }
+
+export function showPurchaseView(show=true){
+ section.hidden=!show;
+ for(const selector of ['.search-area','.workspace','.fx-settings','.sync-strip','#notice']){
+  const element=document.querySelector(selector);if(element)element.hidden=show;
+ }
+ for(const [id,active] of [['view-search',!show],['view-purchases',show]]){
+  const button=document.getElementById(id);button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));
+ }
+ document.querySelector('.view-nav').scrollIntoView({block:'start'});
+}
+document.getElementById('view-search').addEventListener('click',()=>showPurchaseView(false));
+document.getElementById('view-purchases').addEventListener('click',()=>showPurchaseView(true));
