@@ -1,4 +1,4 @@
-import {selectPurchaseCard,purchaseCount,showPurchaseView,quickPurchase,updatePurchaseControls} from './purchases.mjs';
+import {selectPurchaseCard,purchaseCount,purchasePending,showPurchaseView,quickPurchase,updatePurchaseControls} from './purchases.mjs';
 import {cardKey,gradeComparison,yenAmount,validateFx} from './comparison.mjs';
 import {syncConfig} from './sync-config.mjs';
 import {validateDataset, filterProducts, exportCsv, datasetFromCsv, safeUrl} from './core.mjs';
@@ -13,7 +13,7 @@ let dataset={products:[]}, selectedId='', visible=[], loadSequence=0, imported=f
 let fx=null,manualRate=null;
 const yen=n=>{const amount=yenAmount(n,manualRate??fx?.rate);return amount===null?'円換算未取得':'約 '+new Intl.NumberFormat('ja-JP').format(amount)+'円';};
 let latestRun=null, remoteAvailable=false, runStatusKnown=false;
-let catalog={cards:[]},shownLimit=50;
+let catalog={cards:[]},shownLimit=50,comparisonProducts=[];
 const controls=['grade','rarity','source','sort','setCode','availability'];
 const params=new URLSearchParams(location.search);
 $('search').value=params.get('q')||'';
@@ -25,6 +25,7 @@ function updateUrl(){const f=filters(),p=new URLSearchParams();if(f.query)p.set(
 function populateOptions(){for(const [id,values] of [['grade',dataset.products.map(p=>p.grade)],['rarity',dataset.products.map(p=>p.rarity)],['source',dataset.products.flatMap(p=>p.sales.map(s=>s.source))]]){for(const value of [...new Set(values)])if(![...$(id).options].some(o=>o.value===value)){const option=document.createElement('option');option.value=value;option.textContent=id==='grade'?'PSA '+value:value;$(id).append(option);}}}
 
 function render(){
+  comparisonProducts=imported?dataset.products:catalogProducts(catalog,dataset.products,'all');
   const drafts=new Map([...document.querySelectorAll('.quick-entry')].map(el=>{const b=el.querySelector('button');return [b.dataset.card+':'+b.dataset.grade,el.querySelector('input').value];}));
   const activeEntry=document.activeElement?.closest('.quick-entry');const activeButton=activeEntry?.querySelector('button');const focusedQuantity=document.activeElement?.tagName==='INPUT'&&activeButton?activeButton.dataset.card+':'+activeButton.dataset.grade:null;
   visible=filterProducts(imported?dataset.products:catalogProducts(catalog,dataset.products,$('grade').value),filters());
@@ -139,8 +140,8 @@ loadFx();
 boot();
 
 function comparisonHtml(p,compact){
- const products=imported?dataset.products:catalogProducts(catalog,dataset.products,'all');
- return '<div class="grade-comparison '+(compact?'compact':'')+'">'+gradeComparison(p,products,$('source').value).map(({grade,product,latest})=>`<div class="grade-cell"><strong>PSA ${grade}</strong>${latest?`<span class="grade-usd">${money(latest.price)}</span><span class="grade-yen">${yen(latest.price)}</span><small>${date(latest.date)}</small>${compact?'':`<small>${escapeHtml(latest.source)}</small>`}`:`<span class="grade-empty">${product?.sales.length?'該当取引なし':product?.checkState==='no_sales'?'公開履歴なし':'未確認'}</span>`}${compact?`<div class="quick-entry"><input aria-label="${escapeHtml(p.name)} PSA ${grade} 追加枚数" type="number" min="1" max="1000" step="1" value="1"><button type="button" data-quick-add data-card="${escapeHtml(p.catalogId||'')}" data-grade="${grade}" disabled>＋追加</button></div>`:''}${purchaseCount(p.catalogId,grade)===null?'':`<small class="purchase-count">本日買取 ${purchaseCount(p.catalogId,grade)}枚</small>`}</div>`).join('')+'</div>';
+ const products=comparisonProducts;
+ return '<div class="grade-comparison '+(compact?'compact':'')+'">'+gradeComparison(p,products,$('source').value).map(({grade,product,latest})=>`<div class="grade-cell"><strong>PSA ${grade}</strong>${latest?`<span class="grade-usd">${money(latest.price)}</span><span class="grade-yen">${yen(latest.price)}</span><small>${date(latest.date)}</small>${compact?'':`<small>${escapeHtml(latest.source)}</small>`}`:`<span class="grade-empty">${product?.sales.length?'該当取引なし':product?.checkState==='no_sales'?'公開履歴なし':'未確認'}</span>`}${compact?`<div class="quick-entry"><input aria-label="${escapeHtml(p.name)} PSA ${grade} 追加枚数" type="number" min="1" max="1000" step="1" value="1"><button type="button" data-quick-add data-card="${escapeHtml(p.catalogId||'')}" data-grade="${grade}" disabled>＋追加</button></div>`:''}<small class="purchase-count" data-purchase-card="${escapeHtml(p.catalogId||'')}" data-purchase-grade="${grade}">${purchaseCount(p.catalogId,grade)===null?'共有枚数を確認中':`本日買取 ${purchaseCount(p.catalogId,grade)}枚${purchasePending(p.catalogId,grade)?'（保存中）':''}`}</small></div>`).join('')+'</div>';
 }
 function showFx(){
  const rate=manualRate??fx?.rate;
@@ -157,4 +158,9 @@ async function loadFx(){
 $('fx-rate').addEventListener('input',()=>{const input=$('fx-rate');const n=Number(input.value);manualRate=input.value&&Number.isFinite(n)&&n>0?n:null;showFx();});
 setInterval(()=>{if(!document.hidden)loadFx();},3600000);
 
-window.addEventListener('purchase-counts-updated',()=>{if(dataset.products.length)render();});
+window.addEventListener('purchase-counts-updated',()=>{
+ document.querySelectorAll('[data-purchase-card]').forEach(el=>{
+  const {purchaseCard:card,purchaseGrade:grade}=el.dataset,n=purchaseCount(card,grade);
+  el.textContent=n===null?'共有枚数を確認中':'本日買取 '+n+'枚'+(purchasePending(card,grade)?'（保存中）':'');
+ });
+});

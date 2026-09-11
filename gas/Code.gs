@@ -11,6 +11,7 @@ function doGet(e) {
 }
 
 // Run once in the script editor. Does not erase or change other sheets.
+function setup() { return setup_(); }
 function setup_() {
   const lock = LockService.getScriptLock(); lock.waitLock(20000);
   try {
@@ -45,7 +46,7 @@ function log_() {
   if (!sheet) throw Error('GASで setup_ を実行してください');
   assertHeaders_(sheet); return sheet;
 }
-function rows_(sheet) { return sheet.getLastRow()>1 ? sheet.getRange(2,1,sheet.getLastRow()-1,9).getValues() : []; }
+function rows_(sheet) { const last=sheet.getLastRow(); return last>1 ? sheet.getRange(2,1,last-1,9).getValues() : []; }
 function summarize_(rows,day) {
   const items = {};
   rows.filter(r=>String(r[2])===day).forEach(r=>{
@@ -68,9 +69,22 @@ function catalog_() {
   return cards;
 }
 function purchaseBootstrap() { return {cards:catalog_(),summary:purchaseList(today_())}; }
-function purchaseList(day) {
-  validDay_(day); const lock=LockService.getScriptLock();lock.waitLock(20000);
-  try {return summarize_(rows_(log_()),day);} finally {lock.releaseLock();}
+// Short-lived snapshots serve polling clients without repeatedly reading the sheet.
+function readSnapshot_(day) {
+  try {const text=CacheService.getScriptCache().get('purchase-day-v2-'+day);return text?JSON.parse(text):null;} catch(e){return null;}
+}
+function saveSnapshot_(summary) {
+  try {const text=JSON.stringify(summary);if(Utilities.newBlob(text).getBytes().length<95000)CacheService.getScriptCache().put('purchase-day-v2-'+summary.day,text,5);}catch(e){}
+  return summary;
+}
+function purchaseList(day, fresh) {
+  validDay_(day);
+  if(!fresh){const saved=readSnapshot_(day);if(saved)return Object.assign({},saved,{today:today_()});}
+  const lock=LockService.getScriptLock();lock.waitLock(20000);
+  try {
+    if(!fresh){const saved=readSnapshot_(day);if(saved)return Object.assign({},saved,{today:today_()});}
+    return saveSnapshot_(summarize_(rows_(log_()),day));
+  } finally {lock.releaseLock();}
 }
 function validateOperation_(op) {
   if (!op || !/^[a-f0-9-]{36}$/.test(String(op.id)) || !/^jp-[a-z0-9-]+$/.test(String(op.cardId))) throw Error('操作情報が不正です');
@@ -86,7 +100,7 @@ function purchaseAdd(op) {
     if(existing) {
       if(String(existing[2])!==op.day || existing[3]!==op.cardId || String(existing[7])!==op.grade || Number(existing[8])!==op.delta)
         return {ok:false,retryable:false,error:'同じ操作IDに異なる内容が指定されました'};
-      return {ok:true,summary:summarize_(rows,op.day),replayed:true};
+      return {ok:true,summary:saveSnapshot_(summarize_(rows,op.day)),replayed:true};
     }
     if(op.day!==today_())return {ok:false,retryable:false,error:'日付が変わりました。本日を表示して入力し直してください'};
     const card=catalog_().find(c=>c.id===op.cardId);
@@ -95,13 +109,13 @@ function purchaseAdd(op) {
     if((current?current.quantity:0)+op.delta<0)return {ok:false,retryable:false,error:'記録済みの枚数より多く減らすことはできません'};
     const row=[op.id,Utilities.formatDate(new Date(),'Asia/Tokyo','yyyy-MM-dd HH:mm:ss'),op.day,card.id,card.name,card.number,card.set,op.grade,op.delta];
     // Values come from the verified catalog, not a caller-supplied name or formula.
-    sheet.getRange(sheet.getLastRow()+1,1,1,9).setValues([row]);SpreadsheetApp.flush();
-    rows.push(row);return {ok:true,summary:summarize_(rows,op.day),replayed:false};
+    sheet.getRange(rows.length+2,1,1,9).setValues([row]);SpreadsheetApp.flush();
+    rows.push(row);return {ok:true,summary:saveSnapshot_(summarize_(rows,op.day)),replayed:false};
   } finally {lock.releaseLock();}
 }
 function escape_(s) {return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function purchasePdf(day) {
-  const summary=purchaseList(day);
+  const summary=purchaseList(day,true);
   if(!summary.items.length)throw Error('この日の買取記録はありません');
   const html='<!doctype html><html lang="ja"><meta charset="utf-8"><style>@page{size:A4;margin:18mm}body{font-family:Arial,sans-serif;font-size:10pt}h1{font-size:18pt}table{width:100%;border-collapse:collapse}th,td{border:1px solid #bbb;padding:7px;text-align:left}th{background:#eee}thead{display:table-header-group}tr{page-break-inside:avoid}.num{text-align:right}</style><h1>alt相場検索 買取リスト</h1><p>'+escape_(day)+'（日本時間）　合計 '+summary.total+'枚</p><table><thead><tr><th>カード名</th><th>型番・収録弾</th><th>PSA</th><th>枚数</th></tr></thead><tbody>'+summary.items.map(x=>'<tr><td>'+escape_(x.name)+'</td><td>'+escape_(x.number)+'<br>'+escape_(x.set)+'</td><td>'+escape_(x.grade)+'</td><td class="num">'+x.quantity+'</td></tr>').join('')+'</tbody></table><p>出力時点：'+escape_(Utilities.formatDate(new Date(),'Asia/Tokyo','yyyy/MM/dd HH:mm:ss'))+'</p></html>';
   const blob=HtmlService.createHtmlOutput(html).getAs(MimeType.PDF);

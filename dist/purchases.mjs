@@ -1,11 +1,12 @@
 import {purchasesEndpoint} from './purchases-config.mjs';
 const section=document.createElement('section');section.id='purchases';section.className='purchase-section';section.hidden=true;
 document.querySelector('.workspace').after(section);
-let peer=null,peerOrigin='',selected='',summary=null;
+let peer=null,peerOrigin='',selected='',summary=null,optimistic=null;
 const nonce=crypto.randomUUID();
 function sendSelection(){if(peer&&selected)peer.postMessage({type:'alt-purchase-select',nonce,id:selected},peerOrigin);}
 export function selectPurchaseCard(product){const id=product?.catalogId||'';if(id===selected)return;selected=id;sendSelection();}
-export function purchaseCount(cardId,grade){if(!summary||summary.day!==summary.today||summary.day!==new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo'}).format(new Date()))return null;return summary.items.find(x=>x.id===cardId&&x.grade===grade)?.quantity||0;}
+export function purchaseCount(cardId,grade){if(!summary||summary.day!==summary.today||summary.day!==new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo'}).format(new Date()))return null;return (summary.items.find(x=>x.id===cardId&&x.grade===grade)?.quantity||0)+(purchasePending(cardId,grade)?optimistic.delta:0);}
+export function purchasePending(cardId,grade){return !!(optimistic&&summary&&optimistic.day===summary.day&&optimistic.cardId===cardId&&optimistic.grade===grade);}
 if(!purchasesEndpoint){section.innerHTML='<h2>共有の買取記録</h2><p>買取記録は接続準備中です。</p>';}
 else{
  const url=new URL(purchasesEndpoint);
@@ -19,7 +20,10 @@ else{
   if(event.data.type==='alt-purchase-ready'){peer=event.source;peerOrigin=event.origin;sendSelection();}
   if(event.data.type==='alt-purchase-summary'){
    const s=event.data.summary;if(!s||!Array.isArray(s.items)||s.items.some(x=>!Number.isInteger(x.quantity)||x.quantity<0))return;
-   summary=s;window.dispatchEvent(new Event('purchase-counts-updated'));
+   summary=s;
+   const op=event.data.optimistic;
+   optimistic=op&&Number.isInteger(op.delta)&&Math.abs(op.delta)<=1000?op:null;
+   window.dispatchEvent(new Event('purchase-counts-updated'));
   }
  });
 }
