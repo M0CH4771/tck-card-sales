@@ -28,3 +28,10 @@ test('追加拒否時は確定枚数に戻し、異なる送信元を無視す�
  assert.equal(c.ctx.purchaseCount('jp-test-001','8'),3);
  c.message(snapshot(100),null,'https://example.com');assert.equal(c.ctx.purchaseCount('jp-test-001','8'),3);
 });
+
+test('複数カードの保存中表示を独立して加算し、確定後は加算を取り除く',()=>{
+ const c=client();c.message(snapshot(3),[pending,{...pending,grade:'9',delta:4}]);
+ assert.equal(c.ctx.purchaseCount('jp-test-001','8'),5);assert.equal(c.ctx.purchaseCount('jp-test-001','9'),4);
+ c.message({day,today:day,items:[{id:'jp-test-001',grade:'8',quantity:5},{id:'jp-test-001',grade:'9',quantity:4}]});
+ assert.equal(c.ctx.purchaseCount('jp-test-001','8'),5);assert.equal(c.ctx.purchasePending('jp-test-001','9'),false);
+});

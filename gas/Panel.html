@@ -6,7 +6,7 @@ body{font-family:Arial,'Noto Sans JP',sans-serif;color:#202338;margin:0;padding:
 <div id="status" role="status">接続中…</div><button id="retry" hidden>未確認の操作を同じIDで再確認</button>
 <label>カードを検索 <input id="search" type="search" placeholder="カード名・型番" style="width:100%"></label><select id="card" aria-label="買取するカード"></select>
 <div id="counts" class="counts"></div>
-<div class="entry"><label>PSA <select id="grade"><option>8</option><option>9</option><option>10</option></select></label><label>枚数 <input id="quantity" type="number" min="1" max="1000" step="1" value="1"></label><button id="add" class="primary" disabled>買取枚数を追加</button><button id="subtract" disabled>枚数を減らす</button></div>
+<div class="entry"><label>PSA <select id="grade"><option>8</option><option>9</option><option>10</option></select></label><label>枚数 <input id="quantity" type="number" min="0" max="1000" step="1" value="0"></label><button id="add" class="primary" disabled>買取枚数を追加</button><button id="subtract" disabled>枚数を減らす</button></div>
 <h3 id="total">この日の買取一覧</h3><div class="table-wrap"><table><thead><tr><th>カード名</th><th>型番・収録弾</th><th>PSA</th><th>枚数</th></tr></thead><tbody id="rows"></tbody></table></div>
 <script>
 const bridgeNonce='<?!= bridgeNonce ?>',hostOrigin='https://m0ch4771.github.io';
@@ -18,13 +18,13 @@ const pendingKey='alt-purchase-pending-v1';
 function status(text,error=false){window.top.postMessage({type:'alt-purchase-feedback',nonce:bridgeNonce,text},hostOrigin);$('status').textContent=text;$('status').className=error?'error':'';}
 function call(name,arg){return new Promise((resolve,reject)=>{google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[name](arg);});}
 function persist(){try{if(pending)sessionStorage.setItem(pendingKey,JSON.stringify(pending));else sessionStorage.removeItem(pendingKey);}catch{}}
-function buttons(){const disabled=busy||!!pending||!summary||$('day').value!==summary.today||!$('card').value;$('add').disabled=disabled;$('subtract').disabled=disabled;$('retry').hidden=!pending;$('retry').disabled=busy;$('pdf').disabled=busy||!!pending||!summary?.items.length;window.top.postMessage({type:'alt-purchase-controls',nonce:bridgeNonce,blocked:busy||!!pending||!summary},hostOrigin);}
+function buttons(){const disabled=busy||!!pending||!summary||$('day').value!==summary.today||!$('card').value;$('add').disabled=disabled;$('subtract').disabled=disabled;$('retry').hidden=!pending;$('retry').disabled=busy;$('pdf').disabled=busy||!!pending||!summary?.items.length;window.top.postMessage({type:'alt-purchase-controls',nonce:bridgeNonce,batch:true,ack:true,blocked:busy||!!pending||!summary},hostOrigin);}
 function render(){
  if(!summary)return;
  $('total').textContent=summary.day+' の買取一覧：合計 '+summary.total+'枚';
  $('rows').innerHTML=summary.items.map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+esc(x.number)+'<br>'+esc(x.set)+'</td><td>'+esc(x.grade)+'</td><td>'+x.quantity+'</td></tr>').join('')||'<tr><td colspan="4">この日の買取記録はありません</td></tr>';
  $('counts').innerHTML=['8','9','10'].map(g=>{const item=summary.items.find(x=>x.id===$('card').value&&x.grade===g);return '<div>PSA '+g+'<strong>'+(item?.quantity||0)+'枚</strong></div>';}).join('');
- buttons();window.top.postMessage({type:'alt-purchase-summary',nonce:bridgeNonce,summary,optimistic:optimistic?pending:null},hostOrigin);
+ buttons();window.top.postMessage({type:'alt-purchase-summary',nonce:bridgeNonce,summary,optimistic:optimistic?(pending.batch||pending):null},hostOrigin);
 }
 function options(){const value=queuedCard||$('card').value,q=$('search').value.normalize('NFKC').toLowerCase().replace(/\s/g,'');const filtered=cards.filter(c=>(c.name+c.number+c.set).normalize('NFKC').toLowerCase().replace(/\s/g,'').includes(q));$('card').innerHTML=filtered.map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name+' '+c.number+' / '+c.set)+'</option>').join('');if(filtered.some(c=>c.id===value))$('card').value=value;queuedCard='';render();}
 function setCard(id){if(!cards.length){queuedCard=id;return;}$('search').value='';queuedCard=id;options();}
@@ -32,19 +32,33 @@ window.addEventListener('message',e=>{if(e.origin===hostOrigin&&e.source===windo
 
 window.addEventListener('message',async e=>{
  if(e.origin!==hostOrigin||e.source!==window.top||e.data?.nonce!==bridgeNonce||e.data.type!=='alt-purchase-add')return;
- const {cardId,grade,quantity}=e.data;
+ const {cardId,grade,quantity,revision}=e.data;
  if(busy||pending){status('前の操作を確認中です。「買取を記録・PDF」で確認してください。',true);buttons();return;}
  if(!summary||!cards.some(c=>c.id===cardId)||!['8','9','10'].includes(grade)||!Number.isInteger(quantity)||quantity<1||quantity>1000){status('追加内容を確認できません。更新して再度お試しください。',true);buttons();return;}
- followToday=true;seq++;$('day').value=localToday();setCard(cardId);$('grade').value=grade;$('quantity').value=quantity;add(1);
+ followToday=true;seq++;$('day').value=localToday();setCard(cardId);$('grade').value=grade;$('quantity').value=quantity;add(1,revision);
+});
+
+
+window.addEventListener('message',e=>{
+ if(e.origin!==hostOrigin||e.source!==window.top||e.data?.nonce!==bridgeNonce||e.data.type!=='alt-purchase-batch')return;
+ if(busy||pending){status('前の保存を確認中です。',true);buttons();return;}
+ const entries=e.data.entries;
+ if(!summary||!Array.isArray(entries)||!entries.length||entries.length>2000||
+ entries.some(x=>!cards.some(c=>c.id===x.cardId)||!['8','9','10'].includes(x.grade)||!Number.isInteger(x.quantity)||x.quantity<1||x.quantity>1000)){
+  status('一括追加の内容を確認してください。保存していません。',true);buttons();return;
+ }
+ followToday=true;$('day').value=localToday();
+ pending={batch:entries.map(x=>({id:crypto.randomUUID(),day:$('day').value,cardId:x.cardId,grade:x.grade,delta:x.quantity,revision:x.revision}))};
+ persist();optimistic=true;seq++;render();send();
 });
 
 async function refresh(){if(reading||busy||pending||!$('day').value)return;if(followToday&&$('day').value!==localToday()){$('day').value=localToday();summary=null;buttons();}reading=true;const request=++seq,day=$('day').value;try{const next=await call('purchaseList',day);if(request===seq&&day===$('day').value){summary=next;render();if(!pending)status('共有データ更新：'+new Date(next.updatedAt).toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo'}));}}catch(e){status('共有データを確認できません。'+e.message,true);}finally{reading=false;}}
-async function send(){if(!pending||busy)return;busy=true;seq++;buttons();status('枚数を反映しました。共有先に保存中…');const operation=pending;let timer=setTimeout(()=>status('応答を待っています。新しい操作として追加せず、そのままお待ちください。',true),20000);try{const result=await call('purchaseAdd',operation);if(result.ok){optimistic=false;pending=null;persist();summary=result.summary;$('day').value=summary.day;render();status(result.replayed?'保存済みの操作を確認しました（二重加算なし）':'共有の買取枚数を保存しました');}else{if(result.retryable===false){optimistic=false;pending=null;persist();render();}status(result.error,true);}}catch(e){status('保存できたか未確認です。「再確認」で同じ操作を確認してください。 '+e.message,true);}finally{clearTimeout(timer);busy=false;buttons();}}
-function add(sign){if(pending||busy)return;const quantity=Number($('quantity').value);if(!Number.isInteger(quantity)||quantity<1||quantity>1000){status('枚数は1〜1000の整数で入力してください',true);return;}pending={id:crypto.randomUUID(),day:$('day').value,cardId:$('card').value,grade:$('grade').value,delta:sign*quantity};persist();optimistic=true;seq++;render();send();}
+async function send(){if(!pending||busy)return;busy=true;seq++;buttons();status('枚数を反映しました。共有先に保存中…');const operation=pending;let timer=setTimeout(()=>status('応答を待っています。新しい操作として追加せず、そのままお待ちください。',true),20000);try{const result=await call(operation.batch?'purchaseBatch':'purchaseAdd',operation.batch||operation);if(result.ok){window.top.postMessage({type:'alt-purchase-saved',nonce:bridgeNonce,operations:operation.batch||[operation]},hostOrigin);$('quantity').value=0;optimistic=false;pending=null;persist();summary=result.summary;$('day').value=summary.day;render();status(result.replayed?'保存済みの操作を確認しました（二重加算なし）':'共有の買取枚数を保存しました');}else{if(result.retryable===false){optimistic=false;pending=null;persist();render();}status(result.error,true);}}catch(e){status('保存できたか未確認です。「再確認」で同じ操作を確認してください。 '+e.message,true);}finally{clearTimeout(timer);busy=false;buttons();}}
+function add(sign,revision){if(pending||busy)return;const quantity=Number($('quantity').value);if(!Number.isInteger(quantity)||quantity<1||quantity>1000){status('枚数は1〜1000の整数で入力してください',true);return;}pending={id:crypto.randomUUID(),day:$('day').value,cardId:$('card').value,grade:$('grade').value,delta:sign*quantity,revision};persist();optimistic=true;seq++;render();send();}
 $('add').onclick=()=>add(1);$('subtract').onclick=()=>add(-1);$('retry').onclick=send;$('reload').onclick=refresh;
 $('today').onclick=()=>{followToday=true;$('day').value=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo'}).format(new Date());summary=null;buttons();refresh();};
 $('day').onchange=()=>{followToday=$('day').value===localToday();seq++;summary=null;$('pdf').disabled=true;buttons();refresh();};$('search').oninput=options;$('card').onchange=render;
 $('pdf').onclick=async()=>{const day=$('day').value;$('pdf').disabled=true;status('PDFを作成中…');try{const pdf=await call('purchasePdf',day);const bytes=Uint8Array.from(atob(pdf.base64),c=>c.charCodeAt(0));if(pdfUrl)URL.revokeObjectURL(pdfUrl);pdfUrl=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));$('pdf-link').href=pdfUrl;$('pdf-link').download=pdf.name;$('pdf-link').hidden=false;status('PDFを作成しました。「PDFを保存」を押してください。');}catch(e){status('PDF作成に失敗しました。'+e.message,true);}finally{buttons();}};
-async function boot(){try{try{pending=JSON.parse(sessionStorage.getItem(pendingKey)||'null');}catch{}const result=await call('purchaseBootstrap');cards=result.cards;summary=result.summary;$('day').value=summary.day;options();render();status(pending?'前回の未確認操作があります。「再確認」を押してください。':'共有の買取記録に接続しました');window.top.postMessage({type:'alt-purchase-ready',nonce:bridgeNonce,inline:true},hostOrigin);}catch(e){status('接続できません。'+e.message,true);}}
+async function boot(){try{try{pending=JSON.parse(sessionStorage.getItem(pendingKey)||'null');}catch{}const result=await call('purchaseBootstrap');cards=result.cards;summary=result.summary;$('day').value=summary.day;options();render();status(pending?'前回の未確認操作があります。「再確認」を押してください。':'共有の買取記録に接続しました');window.top.postMessage({type:'alt-purchase-ready',nonce:bridgeNonce,inline:true,batch:true,ack:true},hostOrigin);}catch(e){status('接続できません。'+e.message,true);}}
 setInterval(()=>{if(!document.hidden)refresh();},3000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});boot();
 </script></body></html>

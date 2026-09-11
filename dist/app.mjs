@@ -1,4 +1,5 @@
-import {selectPurchaseCard,purchaseCount,purchasePending,showPurchaseView,quickPurchase,updatePurchaseControls} from './purchases.mjs';
+import {kanaGroup,draftKey,validQuantity,draftSummary,acknowledgeDrafts} from './entry-tools.mjs';
+import {selectPurchaseCard,purchaseCount,purchasePending,showPurchaseView,quickPurchase,updatePurchaseControls,batchPurchase,canPurchaseBatch,purchaseTotal} from './purchases.mjs';
 import {cardKey,gradeComparison,yenAmount,validateFx} from './comparison.mjs';
 import {syncConfig} from './sync-config.mjs';
 import {validateDataset, filterProducts, exportCsv, datasetFromCsv, safeUrl} from './core.mjs';
@@ -14,6 +15,10 @@ let fx=null,manualRate=null;
 const yen=n=>{const amount=yenAmount(n,manualRate??fx?.rate);return amount===null?'円換算未取得':'約 '+new Intl.NumberFormat('ja-JP').format(amount)+'円';};
 let latestRun=null, remoteAvailable=false, runStatusKnown=false;
 let catalog={cards:[]},shownLimit=50,comparisonProducts=[];
+let kana='all',draftOnly=false;
+const entryDrafts=new Map();
+try{const saved=JSON.parse(sessionStorage.getItem('alt-entry-drafts-v1')||'null');if(Array.isArray(saved))for(const x of saved)if(x&&/^jp-[a-z0-9-]+$/.test(x.cardId)&&['8','9','10'].includes(x.grade)&&typeof x.revision==='string')entryDrafts.set(draftKey(x.cardId,x.grade),x);}catch{}
+function persistDrafts(){try{sessionStorage.setItem('alt-entry-drafts-v1',JSON.stringify([...entryDrafts.values()]));}catch{}}
 const controls=['grade','rarity','source','sort','setCode','availability'];
 const params=new URLSearchParams(location.search);
 $('search').value=params.get('q')||'';
@@ -26,9 +31,8 @@ function populateOptions(){for(const [id,values] of [['grade',dataset.products.m
 
 function render(){
   comparisonProducts=imported?dataset.products:catalogProducts(catalog,dataset.products,'all');
-  const drafts=new Map([...document.querySelectorAll('.quick-entry')].map(el=>{const b=el.querySelector('button');return [b.dataset.card+':'+b.dataset.grade,el.querySelector('input').value];}));
   const activeEntry=document.activeElement?.closest('.quick-entry');const activeButton=activeEntry?.querySelector('button');const focusedQuantity=document.activeElement?.tagName==='INPUT'&&activeButton?activeButton.dataset.card+':'+activeButton.dataset.grade:null;
-  visible=filterProducts(imported?dataset.products:catalogProducts(catalog,dataset.products,$('grade').value),filters());
+  visible=filterProducts(imported?dataset.products:catalogProducts(catalog,dataset.products,$('grade').value),filters()).filter(p=>(kana==='all'||kanaGroup(p.name)===kana)&&(!draftOnly||[...entryDrafts.values()].some(d=>d.cardId===p.catalogId&&d.quantity!==0)));
   if(!visible.some(p=>p.id===selectedId))selectedId=visible[0]?.id||'';
   const listed=[...new Map(visible.map(p=>[cardKey(p),p])).values()];
   $('count').textContent=`${listed.length.toLocaleString()}種類`;$('export').disabled=!visible.some(p=>p.sales.length);
@@ -39,13 +43,25 @@ function render(){
     $('detail').innerHTML='<div class="empty-detail">条件に合うカードを選ぶと、最近の取引を確認できます。</div>';
     $('empty-clear')?.addEventListener('click',clearFilters);updateUrl();return;
   }
-  $('results').innerHTML=listed.slice(0,shownLimit).map(p=>`<article class="result-card ${cardKey(p)===cardKey(visible.find(x=>x.id===selectedId)||{})?'selected':''}" ><span class="card-top"><span class="tag grade">PSA 8・9・10</span><span class="tag rarity">${escapeHtml(p.rarity)}</span></span><div class="card-name">${escapeHtml(p.name)}</div><p class="card-subtitle">${escapeHtml(p.number)}${p.number?' · ':''}${escapeHtml(p.set||p.nameEn)}</p><div class="card-bottom">${p.latest?`<div class="card-price">${money(p.latest.price)}<small>USD</small></div><div class="card-date">${date(p.latest.date)}<span>${escapeHtml(p.latest.source)} · 直近の取引</span></div>`:`<div class="price-pending">${escapeHtml(availabilityLabel(p))}</div>`}</div>${comparisonHtml(p,true)}<button class="text-button history-open" data-id="${escapeHtml(p.id)}">成約履歴を見る →</button></article>`).join('')+(listed.length>shownLimit?`<button class="button show-more" id="show-more">さらに50件を表示（${shownLimit} / ${listed.length}種類）</button>`:'')+`<p class="result-note">成約履歴あり ${visible.filter(p=>p.latest).length}件 / 未確認・公開履歴なし ${visible.filter(p=>!p.latest).length}件</p>`;
+
+  $('results').innerHTML=listed.slice(0,shownLimit).map(p=>`<article class="result-card"><div class="card-identity"><div class="card-top"><span class="tag rarity">${escapeHtml(p.rarity)}</span><span class="card-number">${escapeHtml(p.number)}</span></div><h3 class="card-name">${escapeHtml(p.name)}</h3><p class="card-subtitle">${escapeHtml(p.set||p.nameEn)}</p><button class="history-open" data-id="${escapeHtml(p.id)}">成約履歴を見る ↗</button></div>${comparisonHtml(p,true)}</article>`).join('')+(listed.length>shownLimit?`<button class="button show-more" id="show-more">さらに50件を表示（${shownLimit} / ${listed.length}種類）</button>`:'');
   $('results').querySelectorAll('[data-id]').forEach(b=>b.addEventListener('click',()=>{selectedId=b.dataset.id;render();$('detail-dialog').showModal();}));
   $('results').querySelectorAll('[data-quick-add]').forEach(b=>b.addEventListener('click',()=>{
-   const input=b.closest('.quick-entry').querySelector('input');quickPurchase(b.dataset.card,b.dataset.grade,Number(input.value));
+   const input=b.closest('.quick-entry').querySelector('input');const draft=entryDrafts.get(draftKey(b.dataset.card,b.dataset.grade));quickPurchase(b.dataset.card,b.dataset.grade,Number(input.value),draft?.revision);
   }));
-  $('results').querySelectorAll('.quick-entry').forEach(el=>{const b=el.querySelector('button'),key=b.dataset.card+':'+b.dataset.grade,input=el.querySelector('input');if(drafts.has(key))input.value=drafts.get(key);if(key===focusedQuantity)input.focus({preventScroll:true});});
-  updatePurchaseControls();
+  $('results').querySelectorAll('.quick-entry').forEach(el=>{
+   const b=el.querySelector('button'),key=draftKey(b.dataset.card,b.dataset.grade),input=el.querySelector('input');
+   input.value=entryDrafts.get(key)?.quantity??0;
+   input.addEventListener('input',()=>{
+    const quantity=Number(input.value);
+    if(quantity===0)entryDrafts.delete(key);
+    else entryDrafts.set(key,{cardId:b.dataset.card,grade:b.dataset.grade,quantity,revision:crypto.randomUUID()});
+    input.setAttribute('aria-invalid',String(quantity!==0&&!validQuantity(quantity)));
+    persistDrafts();updatePurchaseControls();updateBatchBar();
+   });
+   if(key===focusedQuantity)input.focus({preventScroll:true});
+  });
+  updatePurchaseControls();updateBatchBar();
   $('show-more')?.addEventListener('click',()=>{shownLimit+=50;render();});
   const selected=visible.find(p=>p.id===selectedId);
   renderDetail(selected);
@@ -65,7 +81,7 @@ function renderDetail(p){
   const note=document.createElement('p');note.className='record-check';note.textContent='このPSAグレードの履歴確認：'+(p.checkedAt?formatAsOf(p.checkedAt)+'（日本時間）':'未確認')+(p.checkState==='error'?' / 直近の取得に失敗':p.checkState==='no_sales'?' / 現在の公開欄は履歴なし。保存済みの取引を表示中':'');$('detail').querySelector('.detail-head').append(note);
 }
 
-function clearFilters(){ $('search').value='';$('grade').value='all';for(const id of ['rarity','source','setCode','availability'])$(id).value='all';shownLimit=50;render();}
+function clearFilters(){ kana='all';draftOnly=false;$('draft-only').checked=false;document.querySelectorAll('[data-kana]').forEach(b=>{b.classList.toggle('active',b.dataset.kana==='all');b.setAttribute('aria-pressed',String(b.dataset.kana==='all'));});$('search').value='';$('grade').value='all';for(const id of ['rarity','source','setCode','availability'])$(id).value='all';shownLimit=50;render();}
 const formatAsOf=value=>{const d=new Date(value);return Number.isNaN(d.valueOf())?'未確認':new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}).format(d);};
 function showSyncState(){
   $('sync-schedule').textContent='自動取得：'+syncConfig.scheduleLabel;
@@ -141,7 +157,7 @@ boot();
 
 function comparisonHtml(p,compact){
  const products=comparisonProducts;
- return '<div class="grade-comparison '+(compact?'compact':'')+'">'+gradeComparison(p,products,$('source').value).map(({grade,product,latest})=>`<div class="grade-cell"><strong>PSA ${grade}</strong>${latest?`<span class="grade-usd">${money(latest.price)}</span><span class="grade-yen">${yen(latest.price)}</span><small>${date(latest.date)}</small>${compact?'':`<small>${escapeHtml(latest.source)}</small>`}`:`<span class="grade-empty">${product?.sales.length?'該当取引なし':product?.checkState==='no_sales'?'公開履歴なし':'未確認'}</span>`}${compact?`<div class="quick-entry"><input aria-label="${escapeHtml(p.name)} PSA ${grade} 追加枚数" type="number" min="1" max="1000" step="1" value="1"><button type="button" data-quick-add data-card="${escapeHtml(p.catalogId||'')}" data-grade="${grade}" disabled>＋追加</button></div>`:''}<small class="purchase-count" data-purchase-card="${escapeHtml(p.catalogId||'')}" data-purchase-grade="${grade}">${purchaseCount(p.catalogId,grade)===null?'共有枚数を確認中':`本日買取 ${purchaseCount(p.catalogId,grade)}枚${purchasePending(p.catalogId,grade)?'（保存中）':''}`}</small></div>`).join('')+'</div>';
+ return '<div class="grade-comparison '+(compact?'compact':'')+'">'+gradeComparison(p,products,$('source').value).map(({grade,product,latest})=>`<div class="grade-cell"><strong>PSA ${grade}</strong>${latest?`<span class="grade-usd">${money(latest.price)}</span><span class="grade-yen">${yen(latest.price)}</span><small>${date(latest.date)}</small>${compact?'':`<small>${escapeHtml(latest.source)}</small>`}`:`<span class="grade-empty">${product?.sales.length?'該当取引なし':product?.checkState==='no_sales'?'公開履歴なし':'未確認'}</span>`}${compact?`<div class="quick-entry"><input aria-label="${escapeHtml(p.name)} PSA ${grade} 追加枚数" type="number" min="0" max="1000" step="1" value="0" inputmode="numeric"><button type="button" data-quick-add data-card="${escapeHtml(p.catalogId||'')}" data-grade="${grade}" disabled>＋追加</button></div>`:''}<small class="purchase-count" data-purchase-card="${escapeHtml(p.catalogId||'')}" data-purchase-grade="${grade}">${purchaseCount(p.catalogId,grade)===null?'共有枚数を確認中':`本日買取 ${purchaseCount(p.catalogId,grade)}枚${purchasePending(p.catalogId,grade)?'（保存中）':''}`}</small></div>`).join('')+'</div>';
 }
 function showFx(){
  const rate=manualRate??fx?.rate;
@@ -159,8 +175,46 @@ $('fx-rate').addEventListener('input',()=>{const input=$('fx-rate');const n=Numb
 setInterval(()=>{if(!document.hidden)loadFx();},3600000);
 
 window.addEventListener('purchase-counts-updated',()=>{
+ const total=purchaseTotal();$('today-total').textContent=total===null?'—':total.toLocaleString();
  document.querySelectorAll('[data-purchase-card]').forEach(el=>{
   const {purchaseCard:card,purchaseGrade:grade}=el.dataset,n=purchaseCount(card,grade);
   el.textContent=n===null?'共有枚数を確認中':'本日買取 '+n+'枚'+(purchasePending(card,grade)?'（保存中）':'');
  });
 });
+
+function updateBatchBar(){
+ const s=draftSummary(entryDrafts);
+ $('draft-total').textContent=s.total.toLocaleString();
+ $('draft-kinds').textContent=s.cards+'種類 / '+s.entries+'グレード';
+ $('batch-add').disabled=s.entries===0||s.invalid||!canPurchaseBatch();
+ $('draft-reset').disabled=entryDrafts.size===0;
+ $('draft-note').textContent=s.invalid?'枚数は0〜1000の整数で入力してください。':'絞り込みで非表示の入力も含めて追加します。';
+ $('batch-bar').classList.toggle('has-drafts',s.entries>0);
+}
+window.addEventListener('purchase-controls-updated',updateBatchBar);
+window.addEventListener('purchase-saved',e=>{
+ acknowledgeDrafts(entryDrafts,e.detail);persistDrafts();render();updateBatchBar();
+});
+$('batch-add').addEventListener('click',()=>{
+ const s=draftSummary(entryDrafts);if(s.invalid||!s.entries)return;
+ batchPurchase([...entryDrafts.values()].filter(x=>validQuantity(x.quantity)));
+});
+$('draft-reset').addEventListener('click',()=>{entryDrafts.clear();persistDrafts();render();updateBatchBar();});
+$('draft-only').addEventListener('change',()=>{draftOnly=$('draft-only').checked;shownLimit=50;render();});
+document.querySelectorAll('[data-kana]').forEach(b=>b.addEventListener('click',()=>{
+ kana=b.dataset.kana;shownLimit=50;
+ document.querySelectorAll('[data-kana]').forEach(x=>{x.classList.toggle('active',x===b);x.setAttribute('aria-pressed',String(x===b));});
+ render();
+}));
+function applyAppearance(view,size){
+ document.documentElement.dataset.view=view;document.documentElement.dataset.fontSize=size;
+ document.querySelectorAll('[data-layout]').forEach(b=>{const active=b.dataset.layout===view;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));});
+ $('font-size').value=size;
+ try{localStorage.setItem('alt-appearance-v1',JSON.stringify({view,size}));}catch{}
+}
+let appearance={view:'list',size:'standard'};
+try{const saved=JSON.parse(localStorage.getItem('alt-appearance-v1'));if(['list','tile'].includes(saved?.view))appearance.view=saved.view;if(['small','standard','large','xlarge'].includes(saved?.size))appearance.size=saved.size;}catch{}
+applyAppearance(appearance.view,appearance.size);
+document.querySelectorAll('[data-layout]').forEach(b=>b.addEventListener('click',()=>applyAppearance(b.dataset.layout,$('font-size').value)));
+$('font-size').addEventListener('change',()=>applyAppearance(document.documentElement.dataset.view,$('font-size').value));
+updateBatchBar();

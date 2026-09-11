@@ -50,3 +50,23 @@ test('PDF用の強制読み取りはキャッシュを使わず、キャッシ�
  assert.equal(s.ctx.purchaseList('2026-09-10',true).total,2);assert.equal(s.reads,reads+1);
  s.cache.clear();assert.equal(s.ctx.purchaseList('2026-09-10').total,2);
 });
+
+test('一括追加は複数グレードを保存し、同じリクエストの再送を二重加算しない',()=>{
+ const s=server(),ops=[op(),op({id:'22345678-1234-1234-1234-123456789abc',grade:'9',delta:4})];
+ const result=s.ctx.purchaseBatch(ops);assert.equal(result.ok,true);assert.equal(result.summary.total,6);assert.equal(s.data.length,2);
+ assert.equal(s.ctx.purchaseBatch(ops).summary.total,6);assert.equal(s.data.length,2);
+});
+test('一括追加は不正なカードが混ざっていたら全件書き込まない',()=>{
+ const s=server();const bad=op({id:'22345678-1234-1234-1234-123456789abc',cardId:'jp-missing-001'});
+ assert.equal(s.ctx.purchaseBatch([op(),bad]).ok,false);assert.equal(s.data.length,0);
+});
+test('重複ID・0枚・小数・日付混在を一括追加で拒否する',()=>{
+ for(const operations of [[op(),op()],[op({delta:0})],[op({delta:1.2})],[op(),op({id:'22345678-1234-1234-1234-123456789abc',day:'2026-09-11'})]]){
+  const s=server();assert.equal(s.ctx.purchaseBatch(operations).ok,false);assert.equal(s.data.length,0);
+ }
+});
+test('保存済みを含む再試行では未保存分だけを追加し、翌日の再送も確認できる',()=>{
+ const s=server(),ops=[op(),op({id:'22345678-1234-1234-1234-123456789abc',grade:'10',delta:3})];
+ s.ctx.purchaseAdd(ops[0]);assert.equal(s.ctx.purchaseBatch(ops).summary.total,5);assert.equal(s.data.length,2);
+ s.ctx.today_=()=> '2026-09-11';assert.equal(s.ctx.purchaseBatch(ops).ok,true);assert.equal(s.data.length,2);
+});

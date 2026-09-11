@@ -121,3 +121,35 @@ function purchasePdf(day) {
   const blob=HtmlService.createHtmlOutput(html).getAs(MimeType.PDF);
   return {name:'alt-purchases-'+day+'.pdf',base64:Utilities.base64Encode(blob.getBytes())};
 }
+
+/** Validate the entire batch before writing. Retry with the same operation IDs. */
+function purchaseBatch(operations) {
+ try {
+  if(!Array.isArray(operations)||!operations.length||operations.length>2000)throw Error('一括追加の件数が不正です');
+  const ids=new Set(),days=new Set();
+  operations.forEach(op=>{validateOperation_(op);if(op.delta<1)throw Error('一括追加は1〜1000枚で指定してください');if(ids.has(op.id))throw Error('操作IDが重複しています');ids.add(op.id);days.add(op.day);});
+  if(days.size!==1)throw Error('一括追加の日付が一致しません');
+ }catch(e){return {ok:false,retryable:false,error:e.message};}
+ const lock=LockService.getScriptLock();lock.waitLock(20000);
+ try {
+  const sheet=log_(),rows=rows_(sheet),existing=new Map(rows.map(r=>[String(r[0]),r]));
+  const fresh=[];
+  for(const op of operations){
+   const old=existing.get(op.id);
+   if(old){
+    if(String(old[2])!==op.day||String(old[3])!==op.cardId||String(old[7])!==op.grade||Number(old[8])!==op.delta)
+     return {ok:false,retryable:false,error:'同じ操作IDに異なる内容が指定されました'};
+   }else fresh.push(op);
+  }
+  const day=operations[0].day;
+  if(!fresh.length)return {ok:true,replayed:true,summary:saveSnapshot_(summarize_(rows,day))};
+  if(day!==today_())return {ok:false,retryable:false,error:'日付が変わりました。本日を表示して入力し直してください'};
+  const catalog=new Map(catalog_().map(c=>[c.id,c]));
+  if(fresh.some(op=>!catalog.has(op.cardId)))return {ok:false,retryable:false,error:'カード一覧にない商品があります。一括追加は保存していません'};
+  const stamp=Utilities.formatDate(new Date(),'Asia/Tokyo','yyyy-MM-dd HH:mm:ss');
+  const additions=fresh.map(op=>{const c=catalog.get(op.cardId);return [op.id,stamp,day,c.id,c.name,c.number,c.set,op.grade,op.delta];});
+  // One range write rather than a network call per card.
+  sheet.getRange(rows.length+2,1,additions.length,9).setValues(additions);SpreadsheetApp.flush();
+  return {ok:true,replayed:false,summary:saveSnapshot_(summarize_(rows.concat(additions),day))};
+ }finally{lock.releaseLock();}
+}
