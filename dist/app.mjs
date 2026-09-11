@@ -1,5 +1,5 @@
 import {kanaGroup,draftKey,validQuantity,draftSummary,acknowledgeDrafts} from './entry-tools.mjs';
-import {selectPurchaseCard,purchaseCount,purchasePending,showPurchaseView,quickPurchase,updatePurchaseControls,batchPurchase,canPurchaseBatch,purchaseTotal} from './purchases.mjs?v=bulk-20260911';
+import {selectPurchaseCard,purchaseCount,purchasePending,showPurchaseView,quickPurchase,updatePurchaseControls,batchPurchase,canPurchaseBatch,purchaseTotal,purchaseCumulative} from './purchases.mjs?v=range-1';
 import {cardKey,gradeComparison,yenAmount,validateFx} from './comparison.mjs?v=recent3-1';
 import {syncConfig} from './sync-config.mjs';
 import {validateDataset, filterProducts, exportCsv, datasetFromCsv, safeUrl} from './core.mjs';
@@ -167,7 +167,7 @@ boot();
 
 function comparisonHtml(p,compact){
  const products=comparisonProducts;
- return '<div class="grade-comparison '+(compact?'compact':'')+'">'+gradeComparison(p,products,$('source').value).map(({grade,product,latest,recent})=>`<div class="grade-cell"><strong>PSA ${grade}</strong>${latest?`<ol class="recent-sales" aria-label="PSA ${grade} 直近の成約">${recent.map((sale,i)=>`<li class="${i===0?'latest-sale':''}"><span class="sale-meta"><time datetime="${escapeHtml(sale.date)}">${date(sale.date)}</time>${i===0?'<span class="latest-mark">最新</span>':''}</span><span class="grade-usd">${money(sale.price)}</span><span class="grade-yen">${yen(sale.price)}</span><small class="sale-source">${escapeHtml(sale.source)}</small></li>`).join('')}</ol>`:`<span class="grade-empty">${product?.sales.length?'該当取引なし':product?.checkState==='no_sales'?'公開履歴なし':'未確認'}</span>`}${compact?`<button type="button" class="grade-history" data-history-id="${escapeHtml(product?.id||'')}" aria-label="${escapeHtml(p.name)} PSA ${grade} の成約履歴を見る" ${product?'':'disabled'}>成約履歴を見る ↗</button><div class="quick-entry"><input aria-label="${escapeHtml(p.name)} PSA ${grade} 追加枚数" type="number" min="0" max="1000" step="1" value="0" inputmode="numeric"><button type="button" data-quick-add data-card="${escapeHtml(p.catalogId||'')}" data-grade="${grade}" disabled>＋追加</button></div>`:''}<small class="purchase-count" data-purchase-card="${escapeHtml(p.catalogId||'')}" data-purchase-grade="${grade}">${purchaseCount(p.catalogId,grade)===null?'共有枚数を確認中':`本日買取 ${purchaseCount(p.catalogId,grade)}枚${purchasePending(p.catalogId,grade)?'（保存中）':''}`}</small></div>`).join('')+'</div>';
+ return '<div class="grade-comparison '+(compact?'compact':'')+'">'+gradeComparison(p,products,$('source').value).map(({grade,product,latest,recent})=>`<div class="grade-cell"><strong>PSA ${grade}</strong>${latest?`<ol class="recent-sales" aria-label="PSA ${grade} 直近の成約">${recent.map((sale,i)=>`<li class="${i===0?'latest-sale':''}"><span class="sale-meta"><time datetime="${escapeHtml(sale.date)}">${date(sale.date)}</time>${i===0?'<span class="latest-mark">最新</span>':''}</span><span class="grade-usd">${money(sale.price)}</span><span class="grade-yen">${yen(sale.price)}</span><small class="sale-source">${escapeHtml(sale.source)}</small></li>`).join('')}</ol>`:`<span class="grade-empty">${product?.sales.length?'該当取引なし':product?.checkState==='no_sales'?'公開履歴なし':'未確認'}</span>`}${compact?`<button type="button" class="grade-history" data-history-id="${escapeHtml(product?.id||'')}" aria-label="${escapeHtml(p.name)} PSA ${grade} の成約履歴を見る" ${product?'':'disabled'}>成約履歴を見る ↗</button><div class="quick-entry"><input aria-label="${escapeHtml(p.name)} PSA ${grade} 追加枚数" type="number" min="0" max="1000" step="1" value="0" inputmode="numeric"><button type="button" data-quick-add data-card="${escapeHtml(p.catalogId||'')}" data-grade="${grade}" disabled>＋追加</button></div>`:''}<small class="purchase-count" data-purchase-card="${escapeHtml(p.catalogId||'')}" data-purchase-grade="${grade}">${purchaseCount(p.catalogId,grade)===null?'共有枚数を確認中':`本日買取 ${purchaseCount(p.catalogId,grade)}枚${purchasePending(p.catalogId,grade)?'（保存中）':''}`}</small><small class="purchase-count" data-cumulative-card="${escapeHtml(p.catalogId||'')}" data-cumulative-grade="${grade}">${cumulativeLabel(p.catalogId,grade)}</small></div>`).join('')+'</div>';
 }
 function showFx(){
  const rate=manualRate??fx?.rate;
@@ -185,6 +185,7 @@ $('fx-rate').addEventListener('input',()=>{const input=$('fx-rate');const n=Numb
 setInterval(()=>{if(!document.hidden)loadFx();},3600000);
 
 window.addEventListener('purchase-counts-updated',()=>{
+ document.querySelectorAll('[data-cumulative-card]').forEach(el=>{el.textContent=cumulativeLabel(el.dataset.cumulativeCard,el.dataset.cumulativeGrade);});
  const total=purchaseTotal();$('today-total').textContent=total===null?'—':total.toLocaleString();
  document.querySelectorAll('[data-purchase-card]').forEach(el=>{
   const {purchaseCard:card,purchaseGrade:grade}=el.dataset,n=purchaseCount(card,grade);
@@ -228,3 +229,6 @@ applyAppearance(appearance.view,appearance.size);
 document.querySelectorAll('[data-layout]').forEach(b=>b.addEventListener('click',()=>applyAppearance(b.dataset.layout,$('font-size').value)));
 $('font-size').addEventListener('change',()=>applyAppearance(document.documentElement.dataset.view,$('font-size').value));
 updateBatchBar();
+
+
+function cumulativeLabel(card,grade){const n=purchaseCumulative(card,grade);return n===null?'累計：接続先の更新待ち':'累計買取 '+n.toLocaleString()+'枚';}

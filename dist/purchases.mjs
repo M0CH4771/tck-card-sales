@@ -21,6 +21,7 @@ else{
   if(event.data.type==='alt-purchase-ready'){peer=event.source;peerOrigin=event.origin;sendSelection();}
   if(event.data.type==='alt-purchase-summary'){
    const s=event.data.summary;if(!s||!Array.isArray(s.items)||s.items.some(x=>!Number.isInteger(x.quantity)||x.quantity<0))return;
+   if(s.cumulative!==undefined&&(!Array.isArray(s.cumulative)||s.cumulative.some(x=>!Number.isInteger(x.quantity)||x.quantity<0)))return;
    summary=s;
    const op=event.data.optimistic;
    optimistic=(Array.isArray(op)?op:op?[op]:[]).filter(x=>Number.isInteger(x.delta)&&Math.abs(x.delta)<=1000);
@@ -70,3 +71,6 @@ export function batchPurchase(entries){
  inlineBlocked=true;controls();feedback.textContent=entries.length+'件の買取枚数をまとめて保存中…';
  peer.postMessage({type:'alt-purchase-batch',nonce,entries},peerOrigin);return true;
 }
+
+
+export function purchaseCumulative(cardId,grade){if(!Array.isArray(summary?.cumulative))return null;return summary.cumulative.filter(x=>x.id===cardId&&(!grade||x.grade===grade)).reduce((n,x)=>n+x.quantity,0);}

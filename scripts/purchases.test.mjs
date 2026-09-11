@@ -70,3 +70,24 @@ test('保存済みを含む再試行では未保存分だけを追加し、翌�
  s.ctx.purchaseAdd(ops[0]);assert.equal(s.ctx.purchaseBatch(ops).summary.total,5);assert.equal(s.data.length,2);
  s.ctx.today_=()=> '2026-09-11';assert.equal(s.ctx.purchaseBatch(ops).ok,true);assert.equal(s.data.length,2);
 });
+
+
+test('累計は過去日と訂正を含み、期間は両端を含める',()=>{
+ const {ctx,data}=server();
+ const row=(day,grade,n,name='イーブイ',id='jp-test-001')=>['id','stamp',day,id,name,'001','弾',grade,n];
+ data.push(row('2026-09-08','10',4),row('2026-09-09','10',3),row('2026-09-09','10',-1),row('2026-09-10','8',2),row('2026-09-11','9',7));
+ const daily=ctx.purchaseList('2026-09-10');assert.equal(daily.total,2);assert.equal(daily.cumulative.reduce((n,x)=>n+x.quantity,0),15);
+ const range=ctx.purchaseRange({start:'2026-09-09',end:'2026-09-10'});assert.equal(range.total,4);assert.equal(range.items[0].grade,'10');assert.equal(range.items[1].grade,'8');
+ assert.equal(ctx.purchaseRange('2026-09-10').total,2);
+ assert.throws(()=>ctx.purchaseRange({start:'2026-09-10',end:'2026-09-09'}));assert.throws(()=>ctx.purchaseRange({start:'2026-02-30',end:'2026-09-10'}));
+ assert.equal(ctx.purchaseRange('2025-01-01').total,0);
+});
+test('PDFはPSA10・9・8順、その中で名前順、HTMLをエスケープする',()=>{
+ const {ctx,data}=server();
+ for(const [id,name,grade] of [['a','コダック','8'],['b','コダック','10'],['c','イーブイ','10'],['d','イーブイ','9']])data.push([id,'stamp','2026-09-10',id,name,'001','<弾>',grade,1]);
+ const summary=ctx.purchaseRange('2026-09-10');
+ assert.equal(summary.items.map(x=>x.id).join(','),'c,b,d,a');
+ const html=ctx.purchasePdfHtml_(summary);assert.ok(html.indexOf('PSA 10')<html.indexOf('PSA 9'));assert.ok(html.indexOf('PSA 9')<html.indexOf('PSA 8'));assert.ok(html.indexOf('イーブイ')<html.indexOf('コダック'));assert.ok(html.includes('&lt;弾&gt;'));
+ let captured='';ctx.HtmlService={createHtmlOutput:h=>{captured=h;return {getAs:()=>({getBytes:()=>[]})};}};ctx.MimeType={PDF:'pdf'};ctx.Utilities.base64Encode=()=>'';
+ assert.equal(ctx.purchasePdf({start:'2026-09-09',end:'2026-09-10'}).name,'alt-purchases-2026-09-09_to_2026-09-10.pdf');assert.ok(captured.includes('2026-09-09 〜 2026-09-10'));assert.throws(()=>ctx.purchasePdf('2025-01-01'));
+});
