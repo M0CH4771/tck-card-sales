@@ -168,3 +168,13 @@ html{scroll-behavior:smooth}
 .back-to-top>span:first-child{font-size:1.1rem}
 @media(max-width:700px){.back-to-top{right:12px;padding:8px 12px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto!important}}
+
+.recent-sales{list-style:none;padding:0;margin:0 0 8px;text-align:left}
+.recent-sales li{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:6px;padding:9px 0;border-top:1px solid #dfe7f1}
+.recent-sales li:first-child{border-top:0;padding-top:0}
+.sale-meta{grid-column:1/-1;display:flex;align-items:center;gap:5px;font-size:.65rem;color:#65768a;margin-bottom:3px}
+.latest-mark{font-size:.6rem;background:#e4efff;color:#175cd3;border-radius:3px;padding:0 4px}
+.recent-sales .grade-usd{font-size:.95rem;grid-column:1/-1}
+.recent-sales .latest-sale .grade-usd{font-size:1.2rem}
+.recent-sales .grade-yen{font-size:.75rem;grid-column:1/-1}
+.recent-sales .sale-source{font-size:.6rem;grid-column:1/-1;overflow-wrap:anywhere}
