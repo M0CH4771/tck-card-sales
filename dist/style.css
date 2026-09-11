@@ -178,3 +178,6 @@ html{scroll-behavior:smooth}
 .recent-sales .latest-sale .grade-usd{font-size:1.2rem}
 .recent-sales .grade-yen{font-size:.75rem;grid-column:1/-1}
 .recent-sales .sale-source{font-size:.6rem;grid-column:1/-1;overflow-wrap:anywhere}
+
+.grade-history{width:100%;border:0;border-top:1px solid #dfe7f1;background:transparent;color:#175cd3;padding:8px 2px;margin:4px 0 6px;font-size:.7rem;font-weight:600;min-height:36px}
+.grade-history:hover:not(:disabled){background:#edf4ff;border-radius:5px}

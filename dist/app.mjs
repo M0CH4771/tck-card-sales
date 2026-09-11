@@ -11,7 +11,7 @@ const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<
 const money=n=>'$'+new Intl.NumberFormat('en-US',{minimumFractionDigits:Number.isInteger(n)?0:2,maximumFractionDigits:2}).format(n);
 const date=d=>d.replaceAll('-','/');
 let dataset={products:[]}, selectedId='', visible=[], loadSequence=0, imported=false;
-let fx=null,manualRate=null;
+let fx=null,manualRate=null,historyProductId='';
 const yen=n=>{const amount=yenAmount(n,manualRate??fx?.rate);return amount===null?'円換算未取得':'約 '+new Intl.NumberFormat('ja-JP').format(amount)+'円';};
 let latestRun=null, remoteAvailable=false, runStatusKnown=false;
 let catalog={cards:[]},shownLimit=50,comparisonProducts=[];
@@ -44,8 +44,10 @@ function render(){
     $('empty-clear')?.addEventListener('click',clearFilters);updateUrl();return;
   }
 
-  $('results').innerHTML=listed.slice(0,shownLimit).map(p=>`<article class="result-card"><div class="card-identity"><div class="card-top"><span class="tag rarity">${escapeHtml(p.rarity)}</span><span class="card-number">${escapeHtml(p.number)}</span></div><h3 class="card-name">${escapeHtml(p.name)}</h3><p class="card-subtitle">${escapeHtml(p.set||p.nameEn)}</p><button class="history-open" data-id="${escapeHtml(p.id)}">成約履歴を見る ↗</button></div>${comparisonHtml(p,true)}</article>`).join('')+(listed.length>shownLimit?`<button class="button show-more" id="show-more">さらに50件を表示（${shownLimit} / ${listed.length}種類）</button>`:'');
-  $('results').querySelectorAll('[data-id]').forEach(b=>b.addEventListener('click',()=>{selectedId=b.dataset.id;render();$('detail-dialog').showModal();}));
+  $('results').innerHTML=listed.slice(0,shownLimit).map(p=>`<article class="result-card"><div class="card-identity"><div class="card-top"><span class="tag rarity">${escapeHtml(p.rarity)}</span><span class="card-number">${escapeHtml(p.number)}</span></div><h3 class="card-name">${escapeHtml(p.name)}</h3><p class="card-subtitle">${escapeHtml(p.set||p.nameEn)}</p></div>${comparisonHtml(p,true)}</article>`).join('')+(listed.length>shownLimit?`<button class="button show-more" id="show-more">さらに50件を表示（${shownLimit} / ${listed.length}種類）</button>`:'');
+  $('results').querySelectorAll('[data-history-id]').forEach(b=>b.addEventListener('click',()=>{
+   historyProductId=b.dataset.historyId;renderGradeHistory();$('detail-dialog').showModal();
+  }));
   $('results').querySelectorAll('[data-quick-add]').forEach(b=>b.addEventListener('click',()=>{
    const input=b.closest('.quick-entry').querySelector('input');const draft=entryDrafts.get(draftKey(b.dataset.card,b.dataset.grade));quickPurchase(b.dataset.card,b.dataset.grade,Number(input.value),draft?.revision);
   }));
@@ -69,9 +71,17 @@ function render(){
   const comparison=document.createElement('section');comparison.className='comparison-section';comparison.innerHTML='<p class="eyebrow">選択中のカード</p><h2>'+escapeHtml(selected.name)+'</h2><p class="comparison-subtitle">'+escapeHtml([selected.number,selected.set].filter(Boolean).join(' / '))+'</p><h3>PSA 10・9・8 の直近成約</h3>'+comparisonHtml(selected,false)+'<p class=\"fx-caption\">円は表示中の為替レートによる参考換算です。各グレードの成約日は異なります。</p>';
   const entryButton=document.createElement('button');entryButton.className='button primary';entryButton.textContent='このカードの買取枚数を入力';entryButton.addEventListener('click',()=>{$('detail-dialog').close();showPurchaseView(true);});comparison.append(entryButton);
   $('detail').prepend(comparison);
-  const back=document.createElement('button');back.className='button mobile-back';back.textContent='↑ 検索結果に戻る';back.addEventListener('click',()=>$('results').scrollIntoView({behavior:'smooth',block:'start'}));$('detail').prepend(back);updateUrl();
+  const back=document.createElement('button');back.className='button mobile-back';back.textContent='↑ 検索結果に戻る';back.addEventListener('click',()=>$('results').scrollIntoView({behavior:'smooth',block:'start'}));$('detail').prepend(back);updateUrl();if($('detail-dialog').open&&historyProductId)renderGradeHistory();
 }
 
+function renderGradeHistory(){
+ const product=comparisonProducts.find(p=>p.id===historyProductId);
+ if(!product){$('detail').innerHTML='<div class="empty-detail">このグレードの履歴は未確認です。</div>';return;}
+ const sales=product.sales.filter(s=>$('source').value==='all'||s.source===$('source').value).slice().sort((a,b)=>b.date.localeCompare(a.date));
+ $('detail-dialog').querySelector('.dialog-header strong').textContent=product.name+' / PSA '+product.grade+' の成約履歴';
+ renderDetail({...product,sales});
+ if(product.sales.length&&!sales.length)$('detail').innerHTML='<div class="empty-detail">選択した取引元の成約履歴はありません。</div>';
+}
 function renderDetail(p){
   if(!p.sales.length){renderPendingDetail($('detail'),p);return;}
   const latest=p.sales[0], oldest=p.sales.at(-1), image=safeUrl(p.imageUrl), url=safeUrl(p.url,{altOnly:true});
@@ -157,7 +167,7 @@ boot();
 
 function comparisonHtml(p,compact){
  const products=comparisonProducts;
- return '<div class="grade-comparison '+(compact?'compact':'')+'">'+gradeComparison(p,products,$('source').value).map(({grade,product,latest,recent})=>`<div class="grade-cell"><strong>PSA ${grade}</strong>${latest?`<ol class="recent-sales" aria-label="PSA ${grade} 直近の成約">${recent.map((sale,i)=>`<li class="${i===0?'latest-sale':''}"><span class="sale-meta"><time datetime="${escapeHtml(sale.date)}">${date(sale.date)}</time>${i===0?'<span class="latest-mark">最新</span>':''}</span><span class="grade-usd">${money(sale.price)}</span><span class="grade-yen">${yen(sale.price)}</span><small class="sale-source">${escapeHtml(sale.source)}</small></li>`).join('')}</ol>`:`<span class="grade-empty">${product?.sales.length?'該当取引なし':product?.checkState==='no_sales'?'公開履歴なし':'未確認'}</span>`}${compact?`<div class="quick-entry"><input aria-label="${escapeHtml(p.name)} PSA ${grade} 追加枚数" type="number" min="0" max="1000" step="1" value="0" inputmode="numeric"><button type="button" data-quick-add data-card="${escapeHtml(p.catalogId||'')}" data-grade="${grade}" disabled>＋追加</button></div>`:''}<small class="purchase-count" data-purchase-card="${escapeHtml(p.catalogId||'')}" data-purchase-grade="${grade}">${purchaseCount(p.catalogId,grade)===null?'共有枚数を確認中':`本日買取 ${purchaseCount(p.catalogId,grade)}枚${purchasePending(p.catalogId,grade)?'（保存中）':''}`}</small></div>`).join('')+'</div>';
+ return '<div class="grade-comparison '+(compact?'compact':'')+'">'+gradeComparison(p,products,$('source').value).map(({grade,product,latest,recent})=>`<div class="grade-cell"><strong>PSA ${grade}</strong>${latest?`<ol class="recent-sales" aria-label="PSA ${grade} 直近の成約">${recent.map((sale,i)=>`<li class="${i===0?'latest-sale':''}"><span class="sale-meta"><time datetime="${escapeHtml(sale.date)}">${date(sale.date)}</time>${i===0?'<span class="latest-mark">最新</span>':''}</span><span class="grade-usd">${money(sale.price)}</span><span class="grade-yen">${yen(sale.price)}</span><small class="sale-source">${escapeHtml(sale.source)}</small></li>`).join('')}</ol>`:`<span class="grade-empty">${product?.sales.length?'該当取引なし':product?.checkState==='no_sales'?'公開履歴なし':'未確認'}</span>`}${compact?`<button type="button" class="grade-history" data-history-id="${escapeHtml(product?.id||'')}" aria-label="${escapeHtml(p.name)} PSA ${grade} の成約履歴を見る" ${product?'':'disabled'}>成約履歴を見る ↗</button><div class="quick-entry"><input aria-label="${escapeHtml(p.name)} PSA ${grade} 追加枚数" type="number" min="0" max="1000" step="1" value="0" inputmode="numeric"><button type="button" data-quick-add data-card="${escapeHtml(p.catalogId||'')}" data-grade="${grade}" disabled>＋追加</button></div>`:''}<small class="purchase-count" data-purchase-card="${escapeHtml(p.catalogId||'')}" data-purchase-grade="${grade}">${purchaseCount(p.catalogId,grade)===null?'共有枚数を確認中':`本日買取 ${purchaseCount(p.catalogId,grade)}枚${purchasePending(p.catalogId,grade)?'（保存中）':''}`}</small></div>`).join('')+'</div>';
 }
 function showFx(){
  const rate=manualRate??fx?.rate;
