@@ -36,3 +36,22 @@ export function showPurchaseView(show=true){
 }
 document.getElementById('view-search').addEventListener('click',()=>showPurchaseView(false));
 document.getElementById('view-purchases').addEventListener('click',()=>showPurchaseView(true));
+
+let inlineReady=false,inlineBlocked=true;
+const feedback=document.createElement('p');feedback.id='purchase-feedback';feedback.setAttribute('role','status');feedback.textContent='共有の買取記録に接続中…';document.querySelector('.workspace').before(feedback);
+function controls(){document.querySelectorAll('[data-quick-add]').forEach(b=>b.disabled=!inlineReady||inlineBlocked);}
+export function updatePurchaseControls(){controls();}
+export function quickPurchase(cardId,grade,quantity){
+ if(!inlineReady||inlineBlocked||!peer)return;
+ if(!Number.isInteger(quantity)||quantity<1||quantity>1000){feedback.textContent='枚数は1〜1000で入力してください';return;}
+ inlineBlocked=true;controls();feedback.textContent='買取枚数を保存中…';
+ peer.postMessage({type:'alt-purchase-add',nonce,cardId,grade,quantity},peerOrigin);
+}
+window.addEventListener('message',e=>{
+ if(!/^https:\/\/[a-z0-9-]+\.googleusercontent\.com$/.test(e.origin)||e.data?.nonce!==nonce)return;
+ if(e.data.type==='alt-purchase-ready'&&!e.data.inline){feedback.textContent='一覧からの追加は接続先の更新待ちです。「買取を記録・PDF」は利用できます。';}
+ if(e.data.type==='alt-purchase-controls'){
+  inlineReady=true;inlineBlocked=e.data.blocked===true;controls();
+ }
+ if(e.data.type==='alt-purchase-feedback')feedback.textContent=String(e.data.text||'');
+});

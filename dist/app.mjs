@@ -1,4 +1,4 @@
-import {selectPurchaseCard,purchaseCount,showPurchaseView} from './purchases.mjs';
+import {selectPurchaseCard,purchaseCount,showPurchaseView,quickPurchase,updatePurchaseControls} from './purchases.mjs';
 import {cardKey,gradeComparison,yenAmount,validateFx} from './comparison.mjs';
 import {syncConfig} from './sync-config.mjs';
 import {validateDataset, filterProducts, exportCsv, datasetFromCsv, safeUrl} from './core.mjs';
@@ -25,6 +25,8 @@ function updateUrl(){const f=filters(),p=new URLSearchParams();if(f.query)p.set(
 function populateOptions(){for(const [id,values] of [['grade',dataset.products.map(p=>p.grade)],['rarity',dataset.products.map(p=>p.rarity)],['source',dataset.products.flatMap(p=>p.sales.map(s=>s.source))]]){for(const value of [...new Set(values)])if(![...$(id).options].some(o=>o.value===value)){const option=document.createElement('option');option.value=value;option.textContent=id==='grade'?'PSA '+value:value;$(id).append(option);}}}
 
 function render(){
+  const drafts=new Map([...document.querySelectorAll('.quick-entry')].map(el=>{const b=el.querySelector('button');return [b.dataset.card+':'+b.dataset.grade,el.querySelector('input').value];}));
+  const activeEntry=document.activeElement?.closest('.quick-entry');const activeButton=activeEntry?.querySelector('button');const focusedQuantity=document.activeElement?.tagName==='INPUT'&&activeButton?activeButton.dataset.card+':'+activeButton.dataset.grade:null;
   visible=filterProducts(imported?dataset.products:catalogProducts(catalog,dataset.products,$('grade').value),filters());
   if(!visible.some(p=>p.id===selectedId))selectedId=visible[0]?.id||'';
   const listed=[...new Map(visible.map(p=>[cardKey(p),p])).values()];
@@ -36,14 +38,19 @@ function render(){
     $('detail').innerHTML='<div class="empty-detail">条件に合うカードを選ぶと、最近の取引を確認できます。</div>';
     $('empty-clear')?.addEventListener('click',clearFilters);updateUrl();return;
   }
-  $('results').innerHTML=listed.slice(0,shownLimit).map(p=>`<button class="result-card ${cardKey(p)===cardKey(visible.find(x=>x.id===selectedId)||{})?'selected':''}" data-id="${escapeHtml(p.id)}" aria-pressed="${p.id===selectedId}"><span class="card-top"><span class="tag grade">PSA 8・9・10</span><span class="tag rarity">${escapeHtml(p.rarity)}</span></span><div class="card-name">${escapeHtml(p.name)}</div><p class="card-subtitle">${escapeHtml(p.number)}${p.number?' · ':''}${escapeHtml(p.set||p.nameEn)}</p><div class="card-bottom">${p.latest?`<div class="card-price">${money(p.latest.price)}<small>USD</small></div><div class="card-date">${date(p.latest.date)}<span>${escapeHtml(p.latest.source)} · 直近の取引</span></div>`:`<div class="price-pending">${escapeHtml(availabilityLabel(p))}</div>`}</div>${comparisonHtml(p,true)}</button>`).join('')+(listed.length>shownLimit?`<button class="button show-more" id="show-more">さらに50件を表示（${shownLimit} / ${listed.length}種類）</button>`:'')+`<p class="result-note">成約履歴あり ${visible.filter(p=>p.latest).length}件 / 未確認・公開履歴なし ${visible.filter(p=>!p.latest).length}件</p>`;
-  $('results').querySelectorAll('[data-id]').forEach(b=>b.addEventListener('click',()=>{selectedId=b.dataset.id;render();if(matchMedia('(max-width: 780px)').matches)$('detail').scrollIntoView({behavior:'smooth',block:'start'});}));
+  $('results').innerHTML=listed.slice(0,shownLimit).map(p=>`<article class="result-card ${cardKey(p)===cardKey(visible.find(x=>x.id===selectedId)||{})?'selected':''}" ><span class="card-top"><span class="tag grade">PSA 8・9・10</span><span class="tag rarity">${escapeHtml(p.rarity)}</span></span><div class="card-name">${escapeHtml(p.name)}</div><p class="card-subtitle">${escapeHtml(p.number)}${p.number?' · ':''}${escapeHtml(p.set||p.nameEn)}</p><div class="card-bottom">${p.latest?`<div class="card-price">${money(p.latest.price)}<small>USD</small></div><div class="card-date">${date(p.latest.date)}<span>${escapeHtml(p.latest.source)} · 直近の取引</span></div>`:`<div class="price-pending">${escapeHtml(availabilityLabel(p))}</div>`}</div>${comparisonHtml(p,true)}<button class="text-button history-open" data-id="${escapeHtml(p.id)}">成約履歴を見る →</button></article>`).join('')+(listed.length>shownLimit?`<button class="button show-more" id="show-more">さらに50件を表示（${shownLimit} / ${listed.length}種類）</button>`:'')+`<p class="result-note">成約履歴あり ${visible.filter(p=>p.latest).length}件 / 未確認・公開履歴なし ${visible.filter(p=>!p.latest).length}件</p>`;
+  $('results').querySelectorAll('[data-id]').forEach(b=>b.addEventListener('click',()=>{selectedId=b.dataset.id;render();$('detail-dialog').showModal();}));
+  $('results').querySelectorAll('[data-quick-add]').forEach(b=>b.addEventListener('click',()=>{
+   const input=b.closest('.quick-entry').querySelector('input');quickPurchase(b.dataset.card,b.dataset.grade,Number(input.value));
+  }));
+  $('results').querySelectorAll('.quick-entry').forEach(el=>{const b=el.querySelector('button'),key=b.dataset.card+':'+b.dataset.grade,input=el.querySelector('input');if(drafts.has(key))input.value=drafts.get(key);if(key===focusedQuantity)input.focus({preventScroll:true});});
+  updatePurchaseControls();
   $('show-more')?.addEventListener('click',()=>{shownLimit+=50;render();});
   const selected=visible.find(p=>p.id===selectedId);
   renderDetail(selected);
   selectPurchaseCard(selected);
   const comparison=document.createElement('section');comparison.className='comparison-section';comparison.innerHTML='<p class="eyebrow">選択中のカード</p><h2>'+escapeHtml(selected.name)+'</h2><p class="comparison-subtitle">'+escapeHtml([selected.number,selected.set].filter(Boolean).join(' / '))+'</p><h3>PSA 8・9・10 の直近成約</h3>'+comparisonHtml(selected,false)+'<p class=\"fx-caption\">円は表示中の為替レートによる参考換算です。各グレードの成約日は異なります。</p>';
-  const entryButton=document.createElement('button');entryButton.className='button primary';entryButton.textContent='このカードの買取枚数を入力';entryButton.addEventListener('click',()=>showPurchaseView(true));comparison.append(entryButton);
+  const entryButton=document.createElement('button');entryButton.className='button primary';entryButton.textContent='このカードの買取枚数を入力';entryButton.addEventListener('click',()=>{$('detail-dialog').close();showPurchaseView(true);});comparison.append(entryButton);
   $('detail').prepend(comparison);
   const back=document.createElement('button');back.className='button mobile-back';back.textContent='↑ 検索結果に戻る';back.addEventListener('click',()=>$('results').scrollIntoView({behavior:'smooth',block:'start'}));$('detail').prepend(back);updateUrl();
 }
@@ -133,7 +140,7 @@ boot();
 
 function comparisonHtml(p,compact){
  const products=imported?dataset.products:catalogProducts(catalog,dataset.products,'all');
- return '<div class="grade-comparison '+(compact?'compact':'')+'">'+gradeComparison(p,products,$('source').value).map(({grade,product,latest})=>`<div class="grade-cell"><strong>PSA ${grade}</strong>${latest?`<span class="grade-usd">${money(latest.price)}</span><span class="grade-yen">${yen(latest.price)}</span><small>${date(latest.date)}</small>${compact?'':`<small>${escapeHtml(latest.source)}</small>`}`:`<span class="grade-empty">${product?.sales.length?'該当取引なし':product?.checkState==='no_sales'?'公開履歴なし':'未確認'}</span>`}${purchaseCount(p.catalogId,grade)===null?'':`<small class="purchase-count">本日買取 ${purchaseCount(p.catalogId,grade)}枚</small>`}</div>`).join('')+'</div>';
+ return '<div class="grade-comparison '+(compact?'compact':'')+'">'+gradeComparison(p,products,$('source').value).map(({grade,product,latest})=>`<div class="grade-cell"><strong>PSA ${grade}</strong>${latest?`<span class="grade-usd">${money(latest.price)}</span><span class="grade-yen">${yen(latest.price)}</span><small>${date(latest.date)}</small>${compact?'':`<small>${escapeHtml(latest.source)}</small>`}`:`<span class="grade-empty">${product?.sales.length?'該当取引なし':product?.checkState==='no_sales'?'公開履歴なし':'未確認'}</span>`}${compact?`<div class="quick-entry"><input aria-label="${escapeHtml(p.name)} PSA ${grade} 追加枚数" type="number" min="1" max="1000" step="1" value="1"><button type="button" data-quick-add data-card="${escapeHtml(p.catalogId||'')}" data-grade="${grade}" disabled>＋追加</button></div>`:''}${purchaseCount(p.catalogId,grade)===null?'':`<small class="purchase-count">本日買取 ${purchaseCount(p.catalogId,grade)}枚</small>`}</div>`).join('')+'</div>';
 }
 function showFx(){
  const rate=manualRate??fx?.rate;

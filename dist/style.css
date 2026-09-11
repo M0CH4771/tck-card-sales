@@ -64,3 +64,23 @@ main{padding-top:20px}
  .grade-usd{font-size:22px}.grade-yen{font-size:14px}
  .purchase-section{padding:12px}.section-heading{flex-wrap:wrap}
 }
+
+/* Full-width purchase search, matching the store's blue and white interface. */
+:root{--purple:#175cd3;--soft:#edf4ff;--muted:#667085;background:#f4f6f9;color:#172033}
+.workspace{display:block}
+#results{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;max-height:none;overflow:visible;padding:0}
+.result-card{margin:0;box-shadow:0 1px 2px #1018280d;background:white!important}
+.result-card.selected{border-color:var(--line);box-shadow:0 1px 2px #1018280d}.result-card.selected:before{display:none}
+.grade-cell strong,.tag.grade{background:#edf4ff}
+.card-name{font-size:19px}.card-subtitle{min-height:40px}
+.quick-entry{display:flex;flex-direction:column;gap:6px;margin:10px 0 3px}
+.quick-entry input{width:100%;min-width:0;min-height:40px;border:1px solid #cbd3dd;border-radius:6px;text-align:center;background:white}
+.quick-entry button{min-height:42px;border:0;border-radius:6px;background:#175cd3;color:white;font-size:13px;font-weight:700}
+.history-open{width:100%;margin-top:12px;border-top:1px solid var(--line);border-radius:0;text-align:center}
+#purchase-feedback{position:sticky;top:0;z-index:2;background:#edf4ff;border:1px solid #b2ccff;border-radius:8px;padding:10px 14px;color:#1849a9;font-size:14px}
+#detail-dialog{width:min(780px,calc(100% - 24px));max-height:90dvh;overflow:auto;padding:18px}
+#detail-dialog .detail{position:static;max-height:none;margin-top:12px}
+#detail-dialog .mobile-back{display:none}
+.show-more,.result-note{grid-column:1/-1}
+@media(max-width:1100px){#results{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:620px){#results{grid-template-columns:minmax(0,1fr);max-height:none}.card-subtitle{min-height:0}.quick-entry{flex-direction:column}.search-area{padding:12px}}
