@@ -1,5 +1,5 @@
 import {kanaGroup,draftKey,validQuantity,draftSummary,acknowledgeDrafts} from './entry-tools.mjs';
-import {selectPurchaseCard,purchaseCount,purchasePending,showPurchaseView,quickPurchase,updatePurchaseControls,batchPurchase,canPurchaseBatch,purchaseTotal} from './purchases.mjs';
+import {selectPurchaseCard,purchaseCount,purchasePending,showPurchaseView,quickPurchase,updatePurchaseControls,batchPurchase,canPurchaseBatch,purchaseTotal} from './purchases.mjs?v=bulk-20260911';
 import {cardKey,gradeComparison,yenAmount,validateFx} from './comparison.mjs';
 import {syncConfig} from './sync-config.mjs';
 import {validateDataset, filterProducts, exportCsv, datasetFromCsv, safeUrl} from './core.mjs';
