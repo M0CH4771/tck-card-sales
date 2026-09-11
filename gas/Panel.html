@@ -7,7 +7,7 @@ body{font-family:Arial,'Noto Sans JP',sans-serif;color:#202338;margin:0;padding:
 <label>カードを検索 <input id="search" type="search" placeholder="例：いーぶい ／ 173165 ／ ピカチュウ 151" style="width:100%"></label><select id="card" aria-label="買取するカード"></select>
 <div id="search-results" class="search-results" aria-label="カードの検索候補"></div><p id="search-hint" class="muted"></p><div id="selected-card" class="selected-card"></div><div id="counts" class="counts"></div>
 <div class="entry"><label>PSA <select id="grade"><option>10</option><option>9</option><option>8</option></select></label><label>枚数 <input id="quantity" type="number" min="0" max="1000" step="1" value="0"></label><button id="add" class="primary" disabled>買取枚数を追加</button><button id="subtract" disabled>枚数を減らす</button></div>
-<p class="muted">本日の枚数は数字を直接入力して「保存」またはEnterで確定できます。−／＋も使えます。過去日・期間集計は閲覧用です。</p><h3 id="total">この日の買取一覧</h3><div class="table-wrap"><table><thead><tr><th>カード名</th><th>型番・収録弾</th><th>PSA</th><th>枚数</th></tr></thead><tbody id="rows"></tbody></table></div>
+<p class="muted">本日の枚数は数字を直接入力して「保存」またはEnterで確定できます。−／＋も未保存の枚数だけを変更します。保存するまで共有・PDFには反映されません。過去日・期間集計は閲覧用です。</p><h3 id="total">この日の買取一覧</h3><div class="table-wrap"><table><thead><tr><th>カード名</th><th>型番・収録弾</th><th>PSA</th><th>枚数</th></tr></thead><tbody id="rows"></tbody></table></div>
 <hr><h3>期間を指定して買取リストを出力</h3><p class="muted">開始日・終了日の両方を含みます。PSA10 → 9 → 8、各グレード内は名前順。</p>
 <div class="toolbar"><label>開始日 <input id="range-start" type="date"></label><label>終了日 <input id="range-end" type="date"></label><button id="range-show">一覧を表示</button><button id="pdf" disabled>指定期間のPDFを作成</button><a id="pdf-link" hidden>PDFを保存</a></div>
 <p id="range-status" role="status">期間を指定してください。</p><div class="table-wrap"><table><thead><tr><th>カード名</th><th>型番・収録弾</th><th>PSA</th><th>枚数</th></tr></thead><tbody id="range-rows"></tbody></table></div>
@@ -27,7 +27,7 @@ function render(){
  $('total').textContent=summary.day+' の買取一覧：合計 '+summary.total+'枚';
  const drafts=new Map([...$('rows').querySelectorAll('[data-row-quantity]')].filter(el=>el.value!==el.dataset.base||el===document.activeElement).map(el=>[el.dataset.day+'|'+el.dataset.card+'|'+el.dataset.grade,{value:el.value,base:el.dataset.base,focused:el===document.activeElement}]));
  $('rows').innerHTML=summary.items.map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+esc(x.number)+'<br>'+esc(x.set)+'</td><td>'+esc(x.grade)+'</td><td><div class="stepper"><button type="button" data-step="-1" data-card="'+esc(x.id)+'" data-grade="'+esc(x.grade)+'" aria-label="'+esc(x.name)+' PSA '+esc(x.grade)+' を1枚減らす">−</button><input type="number" min="0" step="1" inputmode="numeric" data-row-quantity data-day="'+esc(summary.day)+'" data-card="'+esc(x.id)+'" data-grade="'+esc(x.grade)+'" data-base="'+x.quantity+'" value="'+x.quantity+'" aria-label="'+esc(x.name)+' PSA '+esc(x.grade)+' 本日の買取枚数"><span>枚</span><button type="button" data-step="1" data-card="'+esc(x.id)+'" data-grade="'+esc(x.grade)+'" aria-label="'+esc(x.name)+' PSA '+esc(x.grade)+' を1枚増やす">＋</button><button type="button" data-row-save>保存</button></div></td></tr>').join('')||'<tr><td colspan="4">この日の買取記録はありません</td></tr>';
- $('rows').querySelectorAll('[data-row-quantity]').forEach(el=>{const draft=drafts.get(summary.day+'|'+el.dataset.card+'|'+el.dataset.grade);if(draft){el.value=draft.value;el.dataset.base=draft.base;if(draft.focused)el.focus();}});
+ $('rows').querySelectorAll('[data-row-quantity]').forEach(el=>{const draft=drafts.get(summary.day+'|'+el.dataset.card+'|'+el.dataset.grade);if(draft){el.value=draft.value;el.dataset.base=draft.base;if(draft.focused)el.focus();}markRowDraft(el);});
  $('counts').innerHTML=['10','9','8'].map(g=>{const item=summary.items.find(x=>x.id===$('card').value&&x.grade===g);return '<div>PSA '+g+'<strong>'+(item?.quantity||0)+'枚</strong><small>累計 '+(summary.cumulative?.find(x=>x.id===$('card').value&&x.grade===g)?.quantity||0)+'枚</small></div>';}).join('');
  const selected=cards.find(c=>c.id===$('card').value);$('selected-card').textContent=selected?'選択中：'+selected.name+' '+selected.number+' ／ '+selected.set:'検索候補からカードを選択してください';
  buttons();window.top.postMessage({type:'alt-purchase-summary',nonce:bridgeNonce,summary,optimistic:optimistic?(pending.batch||pending):null},hostOrigin);
@@ -50,7 +50,17 @@ function saveRow(input,step){
  pending={id:crypto.randomUUID(),day:summary.day,cardId:input.dataset.card,grade:input.dataset.grade,delta,revision:''};
  input.value=input.dataset.base;input.blur();persist();optimistic=true;seq++;render();send();
 }
-$('rows').onclick=e=>{const b=e.target.closest('[data-step],[data-row-save]');if(b)saveRow(b.closest('.stepper').querySelector('[data-row-quantity]'),Number(b.dataset.step||0));};
+function adjustRow(input,step){
+ if(busy||pending||!summary||summary.day!==localToday())return;
+ try{
+  if(input.value.trim()==='')throw Error('枚数を入力してください');
+  const next=Number(input.value)+step;rowDelta(String(next),input.dataset.base);
+  input.value=String(next);markRowDraft(input);
+ }catch(e){status(e.message,true);}
+}
+function markRowDraft(input){const button=input.closest('.stepper').querySelector('[data-row-save]');button.textContent=input.value!==input.dataset.base?'保存（未保存）':'保存';}
+$('rows').oninput=e=>{if(e.target.matches('[data-row-quantity]'))markRowDraft(e.target);};
+$('rows').onclick=e=>{const b=e.target.closest('[data-step],[data-row-save]');if(!b)return;const input=b.closest('.stepper').querySelector('[data-row-quantity]');if(b.hasAttribute('data-step'))adjustRow(input,Number(b.dataset.step));else saveRow(input,0);};
 $('rows').onkeydown=e=>{if(e.key==='Enter'&&e.target.matches('[data-row-quantity]')){e.preventDefault();saveRow(e.target,0);}};
 
 function setCard(id){if(!cards.length){queuedCard=id;return;}$('search').value='';queuedCard=id;options();}
