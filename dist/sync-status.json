@@ -1,40 +1,40 @@
 {
   "state": "partial",
-  "startedAt": "2026-09-11T18:09:06.296Z",
-  "completedAt": "2026-09-11T18:42:28.937Z",
-  "dataAsOf": "2026-09-11T18:42:28.937Z",
-  "durationSeconds": 2003,
+  "startedAt": "2026-09-12T17:40:46.995Z",
+  "completedAt": "2026-09-12T18:16:52.295Z",
+  "dataAsOf": "2026-09-12T18:16:52.295Z",
+  "durationSeconds": 2165,
   "coverage": {
     "catalogCards": 605,
-    "checkedPsa8": 414,
-    "pricedPsa8": 404,
+    "checkedPsa8": 416,
+    "pricedPsa8": 406,
     "publicNoSalesPsa8": 10,
-    "pendingPsa8": 191,
-    "updatedThisRun": 1309
+    "pendingPsa8": 189,
+    "updatedThisRun": 1281
   },
   "runCoverage": {
     "total": 1815,
     "selected": 1815,
     "attempted": 1815,
-    "confirmed": 1309,
-    "failed": 434,
+    "confirmed": 1281,
+    "failed": 461,
     "unattempted": 0
   },
   "byGrade": {
     "8": {
-      "confirmed": 380,
-      "failed": 225
+      "confirmed": 364,
+      "failed": 241
     },
     "9": {
-      "confirmed": 495,
-      "failed": 110
+      "confirmed": 482,
+      "failed": 123
     },
     "10": {
-      "confirmed": 506,
-      "failed": 99
+      "confirmed": 508,
+      "failed": 97
     }
   },
-  "linkedCards": 508,
+  "linkedCards": 510,
   "stopReason": "",
-  "message": "PSA10・9・8：今回 1309/1815件確認。URL照合と価格確認は別です。"
+  "message": "PSA10・9・8：今回 1281/1815件確認。URL照合と価格確認は別です。"
 }
