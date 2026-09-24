@@ -1,15 +1,15 @@
 {
   "state": "partial",
-  "startedAt": "2026-09-23T18:48:48.732Z",
-  "completedAt": "2026-09-23T19:22:01.381Z",
-  "dataAsOf": "2026-09-23T19:22:01.381Z",
-  "durationSeconds": 1993,
+  "startedAt": "2026-09-24T18:49:20.900Z",
+  "completedAt": "2026-09-24T19:22:49.973Z",
+  "dataAsOf": "2026-09-24T19:22:49.973Z",
+  "durationSeconds": 2009,
   "coverage": {
     "catalogCards": 605,
-    "checkedPsa8": 430,
-    "pricedPsa8": 420,
+    "checkedPsa8": 431,
+    "pricedPsa8": 421,
     "publicNoSalesPsa8": 10,
-    "pendingPsa8": 175,
+    "pendingPsa8": 174,
     "updatedThisRun": 1343
   },
   "runCoverage": {
@@ -17,17 +17,17 @@
     "selected": 1815,
     "attempted": 1815,
     "confirmed": 1343,
-    "failed": 400,
+    "failed": 402,
     "unattempted": 0
   },
   "byGrade": {
     "8": {
-      "confirmed": 396,
-      "failed": 209
+      "confirmed": 390,
+      "failed": 215
     },
     "9": {
-      "confirmed": 503,
-      "failed": 102
+      "confirmed": 507,
+      "failed": 98
     },
     "10": {
       "confirmed": 516,
