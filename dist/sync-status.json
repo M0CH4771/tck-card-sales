@@ -1,9 +1,9 @@
 {
   "state": "partial",
-  "startedAt": "2026-09-27T18:53:04.811Z",
-  "completedAt": "2026-09-27T19:24:58.838Z",
-  "dataAsOf": "2026-09-27T19:24:58.838Z",
-  "durationSeconds": 1914,
+  "startedAt": "2026-09-28T21:03:09.704Z",
+  "completedAt": "2026-09-28T21:37:46.685Z",
+  "dataAsOf": "2026-09-28T21:37:46.685Z",
+  "durationSeconds": 2077,
   "coverage": {
     "catalogCards": 605,
     "checkedPsa8": 431,
@@ -17,21 +17,21 @@
     "selected": 1815,
     "attempted": 1815,
     "confirmed": 1334,
-    "failed": 410,
+    "failed": 411,
     "unattempted": 0
   },
   "byGrade": {
     "8": {
-      "confirmed": 383,
-      "failed": 222
+      "confirmed": 384,
+      "failed": 221
     },
     "9": {
-      "confirmed": 504,
-      "failed": 101
+      "confirmed": 503,
+      "failed": 102
     },
     "10": {
-      "confirmed": 518,
-      "failed": 87
+      "confirmed": 517,
+      "failed": 88
     }
   },
   "linkedCards": 522,
